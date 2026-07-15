@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "username": "vincent",
+      "role": "admin",
+      "password_hash": "***REDACTED***",
+      "password_salt": "***REDACTED***",
+      "token": "***REDACTED***"
+    }
+  ]
+}

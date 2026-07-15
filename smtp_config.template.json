@@ -1,0 +1,6 @@
+{
+  "from_email": "vincentminvielle@gmail.com",
+  "server": "smtp.gmail.com",
+  "port": 587,
+  "password_b64": "***REDACTED***"
+}

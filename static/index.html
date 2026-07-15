@@ -1,0 +1,3501 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#d03ec6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="CRM Romy">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&hearts;</text></svg>">
+<title>CRM - Les Ami(e)s de Romy</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--pink:#d03ec6;--pink-dark:#9e2b94;--pink-light:#f3e0f5;--gray:#f5f5f5;--dark:#333;--green:#4caf50;--blue:#4e6675;--red:#f44336;--orange:#ff9800;--shadow:0 2px 8px rgba(0,0,0,.15)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--gray);color:var(--dark);font-size:16px;line-height:1.5}
+/* LOGIN */
+#loginView{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--pink),var(--pink-dark));color:#fff}
+#loginView h1{font-size:1.8rem;margin-bottom:.3rem;text-align:center}
+#loginView p{opacity:.8;margin-bottom:2rem}
+#loginView form{background:#fff;color:var(--dark);border-radius:16px;padding:2rem 1.5rem;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+#loginView input{width:100%;padding:14px 12px;margin-bottom:1rem;border:2px solid #e0e0e0;border-radius:10px;font-size:16px}
+#loginView input:focus{border-color:var(--pink);outline:none}
+#loginView button{width:100%;padding:14px;background:var(--pink);color:#fff;border:none;border-radius:10px;font-size:1.1rem;font-weight:600;cursor:pointer}
+#loginView button:active{background:var(--pink-dark)}
+.login-error{color:var(--red);text-align:center;margin-top:1rem;font-size:.9rem}
+/* HEADER */
+header{position:sticky;top:0;z-index:100;background:var(--pink);color:#fff;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+header .title{font-size:1.1rem;font-weight:600}
+header .user-info{display:flex;align-items:center;gap:.5rem;font-size:.85rem}
+header .btn-logout{background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:.8rem;cursor:pointer}
+/* NAV */
+nav{position:sticky;bottom:0;z-index:100;background:#fff;border-top:1px solid #e0e0e0;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none;padding:.3rem 0}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;min-width:64px;background:none;border:none;padding:.5rem .3rem;display:flex;flex-direction:column;align-items:center;gap:2px;color:#999;font-size:.65rem;cursor:pointer;white-space:nowrap}
+nav button.active{color:var(--pink)}
+nav button .nav-icon{font-size:1.4rem}
+/* VIEWS */
+.view{display:none;padding:1rem;padding-bottom:80px}
+.view.active{display:block}
+/* SEARCH */
+.search-bar{display:flex;gap:.5rem;margin-bottom:1rem}
+.search-bar input{flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px}
+.search-bar input:focus{border-color:var(--pink);outline:none}
+.filter-chips{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.5rem;-webkit-overflow-scrolling:touch}
+.chip{white-space:nowrap;padding:6px 14px;border-radius:20px;background:#fff;border:2px solid #e0e0e0;font-size:.85rem;cursor:pointer}
+.chip.active{background:var(--pink);color:#fff;border-color:var(--pink)}
+/* CONTACT CARDS */
+.contact-card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.8rem;box-shadow:var(--shadow);cursor:pointer;transition:transform .1s}
+.contact-card:active{transform:scale(.98)}
+.contact-card .cc-top{display:flex;align-items:center;gap:.8rem}
+.contact-card .cc-avatar{width:44px;height:44px;border-radius:50%;background:var(--pink-light);display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:700;color:var(--pink);flex-shrink:0}
+.contact-card .cc-info{flex:1;min-width:0}
+.contact-card .cc-name{font-weight:600;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contact-card .cc-meta{font-size:.8rem;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contact-card .cc-qualite{display:inline-block;padding:2px 8px;border-radius:10px;background:var(--pink-light);color:var(--pink);font-size:.75rem;margin-top:.2rem}
+/* STAT BOXES (impact) */
+.stat-box{display:inline-block;width:45%;margin:1%;padding:1rem;background:var(--pink-light);border-radius:10px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.stat-box .num{font-size:1.8rem;font-weight:bold;color:var(--pink)}
+.stat-box .lbl{font-size:.8rem;color:#666}
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.modal-handle{width:40px;height:4px;background:#ccc;border-radius:2px;margin:.6rem auto}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:0 1rem .5rem}
+.modal-header h2{font-size:1.2rem}
+.modal-close{background:none;border:none;font-size:1.5rem;color:#999;cursor:pointer;padding:0 .5rem}
+.modal-body{padding:0 1rem 1rem}
+/* FORM */
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.85rem;color:#888;margin-bottom:.3rem;font-weight:500}
+.form-group input,.form-group textarea,.form-group select{width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px;background:#fff}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--pink);outline:none}
+.form-group textarea{resize:vertical;min-height:80px}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:12px 20px;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;text-decoration:none}
+.btn-primary{background:var(--pink);color:#fff}
+.btn-primary:active{background:var(--pink-dark)}
+.btn-secondary{background:#e0e0e0;color:var(--dark)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-sm{padding:8px 12px;font-size:.85rem}
+.btn-full{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+/* HISTORY */
+.history-list{background:var(--gray);border-radius:10px;padding:.5rem}
+.history-entry{padding:.6rem .5rem;border-bottom:1px solid #e0e0e0;font-size:.85rem}
+.history-entry:last-child{border-bottom:none}
+.history-entry .he-user{font-weight:600;color:var(--pink)}
+.history-entry .he-date{color:#888;font-size:.75rem}
+.history-entry .he-action{margin-top:.2rem}
+.history-entry .he-details{color:#666;font-size:.8rem;margin-top:.2rem}
+/* EVENT CARD */
+.event-card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.8rem;box-shadow:var(--shadow)}
+.event-card .ec-date{display:inline-block;background:var(--blue);color:#fff;padding:4px 10px;border-radius:8px;font-size:.85rem;font-weight:600;margin-bottom:.5rem}
+.event-card .ec-title{font-size:1.05rem;font-weight:600;margin-bottom:.3rem}
+.event-card .ec-lieu{font-size:.85rem;color:#888;margin-bottom:.3rem}
+.event-card .ec-desc{font-size:.9rem;color:#555}
+.event-card .ec-participants{font-size:.8rem;color:var(--blue);margin-top:.5rem}
+/* DOC CARD */
+.doc-card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.8rem;box-shadow:var(--shadow);display:flex;align-items:center;gap:.8rem}
+.doc-card .dc-icon{font-size:2rem}
+.doc-card .dc-info{flex:1;min-width:0}
+.doc-card .dc-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-card .dc-meta{font-size:.8rem;color:#888}
+/* STATS */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin-bottom:1rem}
+.stat-card{background:#fff;border-radius:12px;padding:1rem;text-align:center;box-shadow:var(--shadow)}
+.stat-card .sc-num{font-size:2rem;font-weight:700;color:var(--pink)}
+.stat-card .sc-label{font-size:.85rem;color:#888}
+.stat-bar{background:#fff;border-radius:12px;padding:1rem;box-shadow:var(--shadow);margin-bottom:.8rem}
+.stat-bar .sb-row{display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #eee;font-size:.9rem}
+.stat-bar .sb-row:last-child{border-bottom:none}
+/* EMAIL */
+.email-recipients{background:var(--pink-light);border-radius:8px;padding:.5rem;margin-bottom:.5rem;font-size:.85rem;display:flex;flex-wrap:wrap;gap:.3rem}
+.email-recipient{background:var(--pink);color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem;display:inline-flex;align-items:center;gap:4px}
+.email-recipient .er-remove{cursor:pointer;font-weight:700}
+/* FAB */
+.fab{position:fixed;bottom:70px;right:16px;width:56px;height:56px;border-radius:50%;background:var(--pink);color:#fff;border:none;font-size:1.8rem;box-shadow:0 4px 12px rgba(233,30,99,.4);cursor:pointer;z-index:90;display:flex;align-items:center;justify-content:center}
+.fab:active{transform:scale(.95)}
+/* EMPTY STATE */
+.empty{text-align:center;padding:3rem 1rem;color:#999}
+.empty .empty-icon{font-size:3rem;margin-bottom:1rem;opacity:.3}
+/* TOAST */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;padding:10px 20px;border-radius:20px;font-size:.9rem;z-index:300;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast.show{opacity:1}
+/* SECTION COLLAPSE */
+.section-collapse{cursor:pointer;padding:.8rem 0;border-top:1px solid #eee;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.section-collapse .sc-toggle{font-size:1.2rem;transition:transform .2s}
+.section-collapse.collapsed .sc-toggle{transform:rotate(-90deg)}
+.section-content{max-height:max-content;transition:max-height .3s;overflow:hidden}
+.section-content.collapsed{max-height:0}
+/* ADMIN */
+.user-row{background:#fff;border-radius:10px;padding:.8rem 1rem;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow)}
+.user-row .ur-name{font-weight:600}
+.user-row .ur-role{font-size:.8rem;padding:2px 8px;border-radius:8px;background:var(--pink-light);color:var(--pink)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginView">
+<h1>&hearts; Les Ami(e)s de Romy</h1>
+<p>Gestion de l'association</p>
+<form id="loginForm">
+<input type="text" id="loginUser" placeholder="Nom d'utilisateur" autocomplete="username" required>
+<input type="password" id="loginPass" placeholder="Mot de passe" autocomplete="current-password" required>
+<button type="submit">Se connecter</button>
+<div class="login-error" id="loginError"></div>
+</form>
+</div>
+
+<!-- MAIN APP -->
+<div id="appView" style="display:none">
+<header>
+<div class="title">&hearts; Ami(e)s de Romy <span style="font-size:.7rem;opacity:.7">v1.28</span></div>
+<div class="user-info">
+<span id="userNameDisplay"></span>
+<button class="btn-logout" onclick="logout()">Deconnexion</button>
+</div>
+</header>
+
+<!-- CONTACTS -->
+<div class="view active" id="view-contacts">
+<div class="search-bar">
+<input type="text" id="searchInput" placeholder="Rechercher un contact..." oninput="searchContacts()">
+<button class="btn btn-secondary btn-sm" onclick="showImportExcel()" style="white-space:nowrap">&#128202; Excel</button>
+<button class="btn btn-secondary btn-sm" onclick="exportExcel()" style="white-space:nowrap">&#128229; Export</button>
+</div>
+<div class="filter-chips" id="filterChips"></div>
+<div id="contactsList"></div>
+</div>
+
+<!-- EVENEMENTS -->
+<div class="view" id="view-evenements">
+<div style="margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center">
+<div style="display:flex;gap:.3rem">
+<button class="btn btn-secondary btn-sm" id="evViewList" onclick="setEvView('list')">Liste</button>
+<button class="btn btn-secondary btn-sm" id="evViewCal" onclick="setEvView('cal')">Calendrier</button>
+</div>
+<button class="btn btn-secondary btn-sm" onclick="exportIcs()">&#128197; .ics</button>
+</div>
+<div id="evenementsList"></div>
+<div id="evenementsCal" style="display:none"></div>
+</div>
+
+<!-- EMAILING -->
+<div class="view" id="view-emailing">
+<div style="margin-bottom:1rem">
+<label style="font-size:.85rem;color:#888;display:block;margin-bottom:.3rem">Modele predefini (optionnel)</label>
+<select id="emailTemplate" onchange="loadTemplate()" style="width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px">
+<option value="">-- Aucun / Email libre --</option>
+<option value="newsletter">Newsletter</option>
+<option value="relance">Relance</option>
+<option value="invitation">Invitation evenement</option>
+<option value="newsletter_html">Newsletter HTML (mis en forme)</option>
+</select>
+</div>
+<div class="form-group">
+<label>Destinataires (emails)</label>
+<div class="email-recipients" id="emailRecipients"></div>
+<div style="display:flex;gap:.5rem">
+<input type="email" id="emailRecipientInput" placeholder="email@exemple.fr" style="flex:1;padding:10px;border:2px solid #e0e0e0;border-radius:10px">
+<button class="btn btn-secondary btn-sm" onclick="addRecipient()">Ajouter</button>
+</div>
+</div>
+<div class="form-group">
+<label style="font-size:.85rem;color:#888;display:block;margin-bottom:.3rem">Selectionner par groupe</label>
+<select id="emailGroupSelect" onchange="selectEmailGroup(this.value)" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px">
+<option value="">-- Choisir un groupe --</option>
+</select>
+</div>
+<div class="form-group">
+<label style="font-size:.85rem;color:#888;display:block;margin-bottom:.3rem">Ou ajouter un contact individuel</label>
+<select id="emailContactSelect" onchange="addContactByEmail(this.value)" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px">
+<option value="">-- Choisir un contact --</option>
+</select>
+</div>
+<div class="form-group">
+<label>Objet</label>
+<input type="text" id="emailSubject" placeholder="Objet de l'email">
+</div>
+<div class="form-group">
+<label>Message</label>
+<textarea id="emailBody" rows="8" placeholder="Votre message..."></textarea>
+</div>
+<div class="form-group">
+<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+<input type="checkbox" id="emailHtml" style="width:auto"> Envoyer en HTML (mise en formee)
+</label>
+</div>
+<button class="btn btn-primary btn-full" onclick="sendEmail()">Envoyer l'email</button>
+</div>
+
+<!-- DOCUMENTS -->
+<div class="view" id="view-documents">
+<div id="documentsList"></div>
+</div>
+
+<!-- COTISATIONS -->
+<div class="view" id="view-dashboard">
+<div id="dashboardContent"></div>
+</div>
+<div class="view" id="view-groupes">
+<div id="groupesContent"></div>
+</div>
+<div class="view" id="view-cotisations">
+<div style="display:flex;gap:.5rem;margin-bottom:1rem;align-items:center">
+<select id="cotAnneeFilter" onchange="loadCotisations()" style="padding:8px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px">
+<option value="">Toutes annees</option>
+</select>
+</div>
+<div id="cotisationsList"></div>
+</div>
+
+<!-- TACHES -->
+<div class="view" id="view-taches">
+<div id="tachesList"></div>
+</div>
+
+<!-- DONS -->
+<div class="view" id="view-dons">
+<div id="donsList"></div>
+</div>
+
+<!-- STATS -->
+<div class="view" id="view-stats">
+<div id="statsContent"></div>
+</div>
+
+<!-- IMPACT -->
+<div class="view" id="view-impact">
+<div id="impactContent"></div>
+</div>
+
+<!-- CARTOGRAPHIE -->
+<div class="view" id="view-carte">
+<div style="margin-bottom:.5rem;display:flex;gap:.5rem;align-items:center">
+<select id="carteFilterQualite" onchange="loadCarte()" style="padding:8px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px">
+<option value="">Toutes qualites</option>
+</select>
+</div>
+<div id="carteContent" style="min-height:400px"></div>
+</div>
+
+<!-- ACCOMPAGNEMENTS -->
+<div class="view" id="view-accompagnements">
+<div style="display:flex;gap:.5rem;margin-bottom:1rem;align-items:center">
+<select id="accompFilterStatut" onchange="loadAccompagnements()" style="padding:8px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px">
+<option value="">Tous statuts</option>
+<option value="actif">Actifs</option>
+<option value="clos">Clos</option>
+<option value="suspendu">Suspendus</option>
+</select>
+<button class="btn btn-secondary btn-sm" onclick="openRapport()">Rapport activite</button>
+</div>
+<div id="accompagnementsList"></div>
+</div>
+
+<!-- NOTES DE FRAIS -->
+<div class="view" id="view-frais">
+<div id="fraisSummary" style="margin-bottom:1rem"></div>
+<div id="fraisList"></div>
+</div>
+
+<!-- ECHEANCES -->
+<div class="view" id="view-echeances">
+<div id="echeancesList"></div>
+</div>
+
+<!-- REGISTRE APPELS -->
+<div class="view" id="view-appels">
+<div id="appelsList"></div>
+</div>
+
+<!-- VOTES -->
+<div class="view" id="view-votes">
+<div id="votesList"></div>
+</div>
+
+<!-- CHECKLISTS -->
+<div class="view" id="view-checklists">
+<div id="checklistsList"></div>
+</div>
+
+<!-- SONDAGES -->
+<div class="view" id="view-sondages">
+<div id="sondagesList"></div>
+</div>
+
+<!-- COMPTES-RENDUS -->
+<div class="view" id="view-crs">
+<div id="crsList"></div>
+</div>
+
+<!-- SMS / WHATSAPP -->
+<div class="view" id="view-sms">
+<div id="smsList"></div>
+</div>
+
+<!-- PRESSE -->
+<div class="view" id="view-presse">
+<div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+<button class="btn btn-secondary btn-sm" onclick="showPresseTab('contacts')" id="presseTabContacts">Contacts presse</button>
+<button class="btn btn-secondary btn-sm" onclick="showPresseTab('releases')" id="presseTabReleases">Communiques</button>
+<button class="btn btn-secondary btn-sm" onclick="showPresseTab('couvertures')" id="presseTabCouvertures">Couvertures</button>
+</div>
+<div id="presseContactsList"></div>
+<div id="presseReleasesList" style="display:none"></div>
+<div id="presseCouverturesList" style="display:none"></div>
+</div>
+
+<!-- MON ESPACE (membre) -->
+<div class="view" id="view-mon-espace">
+<div id="monEspaceContent"></div>
+</div>
+
+<!-- USERS (admin) -->
+<div class="view" id="view-users">
+<h2 style="margin-bottom:1rem">Utilisateurs</h2>
+<div id="usersList"></div>
+<button class="btn btn-primary btn-full" style="margin-top:1rem" onclick="showAddUser()">+ Nouvel utilisateur</button>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fabBtn" onclick="fabAction()">+</button>
+
+<!-- FEEDBACK BUTTON (fixed bottom-left) -->
+<button id="feedbackBtn" onclick="showFeedbackForm()" style="position:fixed;bottom:70px;left:16px;width:44px;height:44px;border-radius:50%;background:var(--blue);color:#fff;border:none;font-size:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer;z-index:90;display:flex;align-items:center;justify-content:center">&#128172;</button>
+
+<!-- NAV -->
+<nav>
+<button class="active" data-view="contacts" onclick="showView('contacts')"><span class="nav-icon">&#128100;</span>Contacts</button>
+<button data-view="evenements" onclick="showView('evenements')"><span class="nav-icon">&#128197;</span>Evenements</button>
+<button data-view="emailing" onclick="showView('emailing')"><span class="nav-icon">&#9993;</span>Email</button>
+<button data-view="documents" onclick="showView('documents')"><span class="nav-icon">&#128206;</span>Docs</button>
+<button data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">&#128202;</span>Dashboard</button>
+<button data-view="cotisations" onclick="showView('cotisations')"><span class="nav-icon">&#128176;</span>Cotis.</button>
+<button data-view="taches" onclick="showView('taches')"><span class="nav-icon">&#9745;</span>Taches</button>
+<button data-view="groupes" onclick="showView('groupes')"><span class="nav-icon">&#128229;</span>Groupes</button>
+<button data-view="dons" onclick="showView('dons')"><span class="nav-icon">&#127881;</span>Dons</button>
+<button data-view="stats" onclick="showView('stats')"><span class="nav-icon">&#128202;</span>Stats</button>
+<button data-view="impact" onclick="showView('impact')"><span class="nav-icon">&#10084;</span>Impact</button>
+<button data-view="carte" onclick="showView('carte')"><span class="nav-icon">&#128205;</span>Carte</button>
+<button data-view="accompagnements" onclick="showView('accompagnements')"><span class="nav-icon">&#128106;</span>Accomp.</button>
+<button data-view="frais" onclick="showView('frais')"><span class="nav-icon">&#128181;</span>Frais</button>
+<button data-view="echeances" onclick="showView('echeances')"><span class="nav-icon">&#9203;</span>Echeances</button>
+<button data-view="appels" onclick="showView('appels')"><span class="nav-icon">&#128222;</span>Appels</button>
+<button data-view="votes" onclick="showView('votes')"><span class="nav-icon">&#127779;</span>Votes</button>
+<button data-view="checklists" onclick="showView('checklists')"><span class="nav-icon">&#9989;</span>Checklists</button>
+<button data-view="sondages" onclick="showView('sondages')"><span class="nav-icon">&#128202;</span>Sondages</button>
+<button data-view="crs" onclick="showView('crs')"><span class="nav-icon">&#128221;</span>CR</button>
+<button data-view="sms" onclick="showView('sms')"><span class="nav-icon">&#128244;</span>SMS</button>
+<button data-view="presse" onclick="showView('presse')"><span class="nav-icon">&#128240;</span>Presse</button>
+<button data-view="mon-espace" onclick="showView('mon-espace')"><span class="nav-icon">&#128100;</span>Mon espace</button>
+</nav>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+<div class="modal" id="modalContent">
+<div class="modal-handle" onclick="closeModal()"></div>
+<div class="modal-header">
+<h2 id="modalTitle">Contact</h2>
+<button class="modal-close" onclick="closeModal()">&times;</button>
+</div>
+<div class="modal-body" id="modalBody"></div>
+</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let token = localStorage.getItem('romy_token') || '';
+let currentUser = localStorage.getItem('romy_user') || '';
+let currentRole = localStorage.getItem('romy_role') || '';
+let myContactId = localStorage.getItem('romy_contact_id') || '';
+window.myContactId = myContactId;
+let allContacts = [];
+let currentFilter = '';
+let emailRecipients = [];
+let emailContactIds = [];
+
+// ===== XSS PROTECTION =====
+function esc(s) {
+if (!s) return '';
+return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ===== AUTH =====
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+e.preventDefault();
+const username = document.getElementById('loginUser').value.trim();
+const password = document.getElementById('loginPass').value;
+try {
+const res = await fetch('/auth/login', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({username, password})
+});
+if (!res.ok) {
+const err = await res.json();
+throw new Error(err.detail || 'Erreur');
+}
+const data = await res.json();
+token = data.token;
+currentUser = data.username;
+currentRole = data.role;
+window.myContactId = data.contact_id || '';
+localStorage.setItem('romy_token', token);
+localStorage.setItem('romy_user', currentUser);
+localStorage.setItem('romy_role', currentRole);
+if (data.contact_id) localStorage.setItem('romy_contact_id', data.contact_id);
+showApp();
+} catch (e) {
+document.getElementById('loginError').textContent = e.message;
+}
+});
+
+function logout() {
+token = '';
+currentUser = '';
+currentRole = '';
+window.myContactId = '';
+localStorage.removeItem('romy_token');
+localStorage.removeItem('romy_user');
+localStorage.removeItem('romy_role');
+localStorage.removeItem('romy_contact_id');
+location.reload();
+}
+
+function showApp() {
+document.getElementById('loginView').style.display = 'none';
+document.getElementById('appView').style.display = 'block';
+document.getElementById('userNameDisplay').textContent = currentUser + ' (' + currentRole + ')';
+if (currentRole === 'admin') {
+addUsersNav();
+}
+// Members: hide all nav except contacts + evenements
+if (currentRole === 'membre') {
+document.querySelectorAll('nav button').forEach(btn => {
+const view = btn.getAttribute('data-view');
+if (view !== 'contacts' && view !== 'evenements') {
+btn.style.display = 'none';
+}
+});
+// Hide FAB for members (no create)
+document.getElementById('fabBtn').style.display = 'none';
+}
+loadContacts();
+if (currentRole !== 'membre') {
+loadEmailContacts();
+}
+setupPushNotifications();
+}
+
+function addUsersNav() {
+const nav = document.querySelector('nav');
+if (!nav.querySelector('[data-view="users"]')) {
+const btn = document.createElement('button');
+btn.setAttribute('data-view', 'users');
+btn.onclick = () => showView('users');
+btn.innerHTML = '<span class="nav-icon">&#128737;</span>Admin';
+nav.appendChild(btn);
+}
+}
+
+// ===== API HELPER =====
+async function api(url, options = {}) {
+const headers = options.headers || {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+if (options.body && typeof options.body === 'object') {
+headers['Content-Type'] = 'application/json';
+options.body = JSON.stringify(options.body);
+}
+const res = await fetch(url, {...options, headers});
+if (res.status === 401) {
+logout();
+return null;
+}
+if (!res.ok) {
+const err = await res.json().catch(() => ({detail: 'Erreur'}));
+throw new Error(err.detail || 'Erreur');
+}
+return res.json();
+}
+
+// ===== VIEWS =====
+function showView(name) {
+document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+const view = document.getElementById('view-' + name);
+if (view) view.classList.add('active');
+const navBtn = document.querySelector(`[data-view="${name}"]`);
+if (navBtn) navBtn.classList.add('active');
+if (name === 'evenements') loadEvenements();
+if (name === 'documents') loadDocuments();
+if (name === 'dashboard') loadDashboard();
+    if (name === 'cotisations') loadCotisations();
+    if (name === 'groupes') loadGroupes();
+if (name === 'taches') loadTaches();
+if (name === 'dons') loadDons();
+if (name === 'stats') loadStats();
+if (name === 'users') loadUsers();
+if (name === 'impact') loadImpact();
+if (name === 'carte') loadCarte();
+if (name === 'accompagnements') loadAccompagnements();
+if (name === 'frais') loadFrais();
+if (name === 'echeances') loadEcheances();
+if (name === 'appels') loadAppels();
+if (name === 'votes') loadVotes();
+if (name === 'checklists') loadChecklists();
+if (name === 'sondages') loadSondages();
+if (name === 'crs') loadCRs();
+if (name === 'sms') loadSms();
+if (name === 'presse') loadPresse();
+if (name === 'mon-espace') loadMonEspace();
+// FAB
+const fab = document.getElementById('fabBtn');
+if (currentRole === 'membre') {
+fab.style.display = 'none';
+} else if (name === 'contacts') fab.style.display = 'flex';
+else if (name === 'evenements') fab.style.display = 'flex';
+else if (name === 'documents') fab.style.display = 'flex';
+else if (name === 'cotisations') fab.style.display = 'flex';
+else if (name === 'taches') fab.style.display = 'flex';
+else if (name === 'dons') fab.style.display = 'flex';
+else if (name === 'accompagnements') fab.style.display = 'flex';
+else if (name === 'frais') fab.style.display = 'flex';
+else if (name === 'echeances') fab.style.display = 'flex';
+else if (name === 'appels') fab.style.display = 'flex';
+else if (name === 'votes') fab.style.display = 'flex';
+else if (name === 'checklists') fab.style.display = 'flex';
+else if (name === 'sondages') fab.style.display = currentRole === 'membre' ? 'none' : 'flex';
+else if (name === 'crs') fab.style.display = 'flex';
+else if (name === 'sms') fab.style.display = 'flex';
+else if (name === 'presse') fab.style.display = 'flex';
+else if (name === 'mon-espace') fab.style.display = 'none';
+else fab.style.display = 'none';
+}
+
+function fabAction() {
+const activeView = document.querySelector('.view.active');
+if (activeView.id === 'view-contacts') showContactForm();
+else if (activeView.id === 'view-evenements') showEvenementForm();
+else if (activeView.id === 'view-documents') showDocUpload();
+else if (activeView.id === 'view-cotisations') showCotisationForm();
+else if (activeView.id === 'view-taches') showTacheForm();
+else if (activeView.id === 'view-dons') showDonForm();
+else if (activeView.id === 'view-accompagnements') showAccompagnementForm();
+else if (activeView.id === 'view-frais') showFraisForm();
+else if (activeView.id === 'view-echeances') showEcheanceForm();
+else if (activeView.id === 'view-appels') showAppelForm();
+else if (activeView.id === 'view-votes') showVoteForm();
+else if (activeView.id === 'view-checklists') showChecklistForm();
+else if (activeView.id === 'view-sondages') showSondageForm();
+else if (activeView.id === 'view-crs') showCrForm();
+else if (activeView.id === 'view-sms') showSmsForm();
+else if (activeView.id === 'view-presse') showPresseFormByTab();
+}
+
+
+// ===== DASHBOARD =====
+async function loadDashboard() {
+try {
+const d = await api('/api/dashboard');
+let html = '';
+
+// Activites recentes
+html += '<div class="stat-bar"><div style="font-weight:600;margin-bottom:.5rem">Activites recentes (7 derniers jours)</div>';
+if (d.activites_recentes && d.activites_recentes.length > 0) {
+for (const a of d.activites_recentes.slice(0, 10)) {
+const date = a.date ? new Date(a.date).toLocaleDateString('fr-FR') + ' ' + new Date(a.date).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}) : '-';
+html += '<div class="sb-row"><span><b>' + esc(a.user) + '</b> — ' + esc(a.action) + ' — ' + esc(a.contact) + '</span><span style="color:#888;font-size:.8rem">' + date + '</span></div>';
+}
+} else {
+html += '<div style="color:#999;padding:.5rem">Aucune activite recente</div>';
+}
+html += '</div>';
+
+// Cotisations en retard
+html += '<div class="stat-bar" style="margin-top:.8rem"><div style="font-weight:600;margin-bottom:.5rem">Cotisations en retard (' + new Date().getFullYear() + ')</div>';
+if (d.cotisations_retard && d.cotisations_retard.length > 0) {
+for (const c of d.cotisations_retard) {
+html += '<div class="sb-row"><span style="color:var(--red)">' + esc(c.contact_nom) + ' — ' + esc(c.statut) + '</span><span>' + (c.montant || 0) + ' EUR</span></div>';
+}
+} else {
+html += '<div style="color:var(--green);padding:.5rem">Toutes les cotisations sont a jour</div>';
+}
+html += '</div>';
+
+// Contacts sans cotisation
+html += '<div class="stat-bar" style="margin-top:.8rem"><div style="font-weight:600;margin-bottom:.5rem">Contacts sans cotisation (' + new Date().getFullYear() + '): ' + (d.contacts_sans_cotisation || []).length + '</div>';
+if (d.contacts_sans_cotisation && d.contacts_sans_cotisation.length > 0 && d.contacts_sans_cotisation.length <= 10) {
+for (const c of d.contacts_sans_cotisation) {
+html += '<div class="sb-row"><span>' + esc(c.nom) + ' (' + esc(c.qualite || '-') + ')</span>' + (c.email ? '<span style="color:var(--blue);font-size:.8rem">email OK</span>' : '<span style="color:#999;font-size:.8rem">pas email</span>') + '</div>';
+}
+} else if (d.contacts_sans_cotisation && d.contacts_sans_cotisation.length > 10) {
+html += '<div style="color:#999;padding:.5rem">' + d.contacts_sans_cotisation.length + ' contacts sans cotisation</div>';
+}
+html += '</div>';
+
+// Taches a venir
+html += '<div class="stat-bar" style="margin-top:.8rem"><div style="font-weight:600;margin-bottom:.5rem">Taches a venir (30 jours)</div>';
+if (d.taches_a_venir && d.taches_a_venir.length > 0) {
+for (const t of d.taches_a_venir) {
+const color = t.jours_restants <= 3 ? 'var(--red)' : (t.jours_restants <= 7 ? 'var(--orange)' : 'var(--blue)');
+html += '<div class="sb-row"><span>' + esc(t.titre) + (t.contact_nom ? ' — ' + esc(t.contact_nom) : '') + '</span><span style="color:' + color + '">' + t.jours_restants + 'j</span></div>';
+}
+} else {
+html += '<div style="color:#999;padding:.5rem">Aucune tache a venir</div>';
+}
+html += '</div>';
+
+// Prochains evenements
+html += '<div class="stat-bar" style="margin-top:.8rem"><div style="font-weight:600;margin-bottom:.5rem">Prochains evenements</div>';
+if (d.prochains_evenements && d.prochains_evenements.length > 0) {
+for (const ev of d.prochains_evenements) {
+html += '<div class="sb-row"><span>' + esc(ev.titre) + (ev.lieu ? ' — ' + esc(ev.lieu) : '') + '</span><span style="color:var(--blue)">' + ev.jours_restants + 'j</span></div>';
+}
+} else {
+html += '<div style="color:#999;padding:.5rem">Aucun evenement a venir</div>';
+}
+html += '</div>';
+
+// Contacts non contactes depuis 90j
+html += '<div class="stat-bar" style="margin-top:.8rem"><div style="font-weight:600;margin-bottom:.5rem">Contacts non contactes depuis +90 jours</div>';
+if (d.contacts_non_contactes && d.contacts_non_contactes.length > 0) {
+for (const c of d.contacts_non_contactes.slice(0, 10)) {
+html += '<div class="sb-row"><span>' + esc(c.nom) + '</span><span style="color:var(--orange)">' + c.jours + 'j</span></div>';
+}
+} else {
+html += '<div style="color:var(--green);padding:.5rem">Tous les contacts ont ete contactes recemment</div>';
+}
+html += '</div>';
+
+// Bouton relance
+html += '<button class="btn btn-primary btn-full" style="margin-top:1rem" onclick="relanceCotisations()">Relancer les cotisations impayees</button>';
+
+document.getElementById('dashboardContent').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+async function relanceCotisations() {
+if (!confirm('Envoyer un email de relance aux contacts sans cotisation payee ?')) return;
+try {
+const res = await api('/api/cotisations/relance', {method: 'POST'});
+showToast('Relance envoyee a ' + res.envoyes + ' contact(s)');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== GROUPES DE DIFFUSION =====
+async function loadGroupes() {
+try {
+const groupes = await api('/api/groupes/diffusion');
+if (!groupes || groupes.length === 0) {
+document.getElementById('groupesContent').innerHTML = '<div class="empty"><div class="empty-icon">&#128229;</div>Aucun groupe</div>';
+return;
+}
+let html = '';
+for (const g of groupes) {
+const color = g.avec_email > 0 ? 'var(--green)' : 'var(--red)';
+html += "<div class=\"doc-card\" style=\"cursor:pointer\" data-qualite=\"" + g.qualite + "\" onclick=\"showGroupeEmail(this.dataset.qualite)\">";
+html += '<div class="dc-icon" style="color:' + color + '">&#128229;</div>';
+html += '<div class="dc-info">';
+html += '<div class="dc-name">' + esc(g.qualite) + ' (' + g.total + ' contacts)</div>';
+html += '<div class="dc-meta">' + g.avec_email + ' avec email | ' + (g.total - g.avec_email) + ' sans email</div>';
+html += '</div>';
+html += '<button class="btn btn-secondary btn-sm">Email</button>';
+html += '</div>';
+}
+document.getElementById('groupesContent').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+async function showGroupeEmail(qualite) {
+try {
+const groupes = await api('/api/groupes/diffusion');
+const g = groupes.find(x => x.qualite === qualite);
+if (!g || !g.contacts.length) {
+showToast('Aucun contact avec email dans ce groupe');
+return;
+}
+const contactIds = g.contacts.map(c => c.id);
+const emails = g.contacts.map(c => c.email).join(', ');
+const subject = 'Les Ami(e)s de Romy — ' + qualite;
+const body = 'Bonjour,\n\nMessage pour le groupe "' + qualite + '".\n\nCordialement,\nL equipe des Ami(e)s de Romy';
+showView('emailing');
+document.getElementById('emailSubject').value = subject;
+document.getElementById('emailBody').value = body;
+emailContactIds = contactIds;
+emailRecipients = [];
+renderEmailRecipients();
+loadEmailContacts();
+showToast('Groupe "' + qualite + '" charge: ' + g.contacts.length + ' destinataires');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== IMPORT EXCEL =====
+function showImportExcel() {
+document.getElementById('modalTitle').textContent = 'Importer un fichier Excel';
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:1rem;padding:.8rem;background:var(--pink-light);border-radius:10px;font-size:.85rem">
+Selectionnez un fichier .xlsx. Les colonnes reconnues seront importees automatiquement.
+Les doublons (meme nom, telephone ou email) seront ignores.
+</div>
+<div class="form-group"><label>Fichier Excel (.xlsx)</label><input type="file" id="import-file" accept=".xlsx,.xls"></div>
+<button class="btn btn-primary btn-full" onclick="doImportExcel()">Importer</button>
+<div id="importResult" style="margin-top:1rem"></div>
+`;
+openModal();
+}
+
+async function doImportExcel() {
+const fileInput = document.getElementById('import-file');
+if (!fileInput.files[0]) {
+showToast('Selectionnez un fichier .xlsx');
+return;
+}
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+try {
+const headers = {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+const res = await fetch('/api/import/excel', {method: 'POST', headers, body: formData});
+const data = await res.json();
+if (!res.ok) {
+throw new Error(data.detail || 'Erreur import');
+}
+let html = `<div style="padding:1rem;background:#e8f5e9;border-radius:10px;margin-bottom:.5rem">
+<div style="font-weight:600;color:var(--green)">Import reussi</div>
+<div style="margin-top:.5rem">${data.ajoutes} contact(s) ajoute(s), ${data.doublons_ignores} doublon(s) ignore(s)</div>
+</div>`;
+if (data.nouveaux && data.nouveaux.length) {
+html += '<div style="font-weight:600;margin-bottom:.3rem">Nouveaux contacts :</div>';
+for (const n of data.nouveaux) {
+html += `<div style="padding:.2rem 0;color:var(--green)">+ ${esc(n)}</div>`;
+}
+}
+if (data.deja_existants && data.deja_existants.length) {
+html += '<div style="font-weight:600;margin-top:.5rem;margin-bottom:.3rem">Deja presents :</div>';
+for (const d of data.deja_existants) {
+html += `<div style="padding:.2rem 0;color:#888">= ${esc(d)}</div>`;
+}
+}
+if (data.colonnes_detectees) {
+html += '<div style="margin-top:.5rem;font-size:.8rem;color:#888">Colonnes detectees : ' + Object.entries(data.colonnes_detectees).map(([k,v]) => `${esc(k)} <- ${esc(v)}`).join(', ') + '</div>';
+}
+document.getElementById('importResult').innerHTML = html;
+loadContacts();
+showToast(`${data.ajoutes} contact(s) importe(s)`);
+} catch (e) {
+document.getElementById('importResult').innerHTML = `<div style="padding:1rem;background:#ffebee;border-radius:10px;color:var(--red)">${esc(e.message)}</div>`;
+showToast(e.message);
+}
+}
+
+// ===== CONTACTS =====
+async function loadContacts() {
+try {
+allContacts = await api('/api/contacts');
+renderContacts();
+renderFilterChips();
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function renderFilterChips() {
+const qualites = [...new Set(allContacts.map(c => c.qualite).filter(Boolean))];
+const container = document.getElementById('filterChips');
+let html = `<button class="chip ${!currentFilter?'active':''}" onclick="setFilter('')">Tous</button>`;
+for (const q of qualites) {
+html += `<button class="chip ${currentFilter===q?'active':''}" onclick="setFilter('${esc(q)}')">${esc(q)}</button>`;
+}
+container.innerHTML = html;
+}
+
+function setFilter(q) {
+currentFilter = q;
+renderContacts();
+renderFilterChips();
+}
+
+function searchContacts() {
+renderContacts();
+}
+
+function renderContacts() {
+const search = document.getElementById('searchInput').value.toLowerCase();
+let filtered = allContacts;
+if (search) {
+filtered = filtered.filter(c =>
+(c.prenom + ' ' + c.nom + ' ' + c.email + ' ' + c.telephone + ' ' + c.notes).toLowerCase().includes(search)
+);
+}
+if (currentFilter) {
+filtered = filtered.filter(c => c.qualite === currentFilter);
+}
+if (filtered.length === 0) {
+document.getElementById('contactsList').innerHTML = '<div class="empty"><div class="empty-icon">&#128100;</div>Aucun contact</div>';
+return;
+}
+let html = '';
+for (const c of filtered) {
+const initials = esc((c.prenom[0] || '?') + (c.nom[0] || ''));
+html += `<div class="contact-card" onclick="showContactDetail('${c.id}')">
+<div class="cc-top">
+<div class="cc-avatar">${initials.toUpperCase()}</div>
+<div class="cc-info">
+<div class="cc-name">${esc(c.prenom)} ${esc(c.nom)}</div>
+<div class="cc-meta">${esc(c.telephone || c.email || 'Pas de contact')}</div>
+${c.qualite ? `<span class="cc-qualite">${esc(c.qualite)}</span>` : ''}
+</div>
+</div>
+</div>`;
+}
+document.getElementById('contactsList').innerHTML = html;
+}
+
+// CONTACT DETAIL
+async function showContactDetail(id) {
+try {
+const c = await api(`/api/contacts/${id}`);
+if (!c) return;
+const historyHtml = (c.historique || []).slice().reverse().map(h => {
+const d = new Date(h.date);
+const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+return `<div class="history-entry">
+<span class="he-user">${esc(h.user)}</span> <span class="he-date">${dateStr}</span>
+<div class="he-action">${esc(h.action)}</div>
+${h.details ? `<div class="he-details">${esc(h.details)}</div>` : ''}
+</div>`;
+}).join('');
+document.getElementById('modalTitle').textContent = `${c.prenom} ${c.nom}`;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:1rem">
+<div style="font-size:.85rem;color:#888">Telephone</div>
+<div>${esc(c.telephone || '-')}</div>
+</div>
+<div style="margin-bottom:1rem">
+<div style="font-size:.85rem;color:#888">Email</div>
+<div>${esc(c.email || '-')}</div>
+</div>
+<div style="margin-bottom:1rem">
+<div style="font-size:.85rem;color:#888">Qualite</div>
+<div>${esc(c.qualite || '-')}</div>
+</div>
+${c.tags ? `<div style="margin-bottom:1rem"><div style="font-size:.85rem;color:#888">Tags</div><div>${esc(c.tags)}</div></div>` : ''}
+<div style="margin-bottom:1rem">
+<div style="font-size:.85rem;color:#888">Notes</div>
+<div style="white-space:pre-wrap">${esc(c.notes || '-')}</div>
+</div>
+<div style="font-size:.8rem;color:#888;margin-bottom:.5rem">Cree par ${esc(c.cree_par)} le ${formatDate(c.cree_le)}${c.modifie_par ? ', modifie par '+esc(c.modifie_par)+' le '+formatDate(c.modifie_le) : ''}</div>
+<div class="section-collapse" onclick="toggleSection(this)">Historique (${(c.historique||[]).length}) <span class="sc-toggle">&#8964;</span></div>
+<div class="section-content">
+<div class="history-list">${historyHtml || '<div style="padding:.5rem;color:#999">Aucun historique</div>'}</div>
+</div>
+<div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+${currentRole === 'membre' ? '' :
+`<button class="btn btn-primary btn-sm" onclick="showContactForm('${c.id}')">Modifier</button>
+<button class="btn btn-secondary btn-sm" onclick="addHistoryNote('${c.id}')">+ Note</button>`}
+${c.telephone ? `<button class="btn btn-green btn-sm" onclick="callPhone('${esc(c.telephone)}')">Appeler</button>` : ''}
+${c.email ? `<button class="btn btn-blue btn-sm" onclick="emailContact('${c.id}')">Email</button>` : ''}
+${currentRole === 'membre' ? '' :
+`<button class="btn btn-danger btn-sm" onclick="deleteContact('${c.id}')">Supprimer</button>`}
+</div>
+`;
+openModal();
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function formatDate(iso) {
+if (!iso) return '-';
+const d = new Date(iso);
+return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+}
+
+function toggleSection(el) {
+el.classList.toggle('collapsed');
+const content = el.nextElementSibling;
+content.classList.toggle('collapsed');
+}
+
+// CONTACT FORM
+async function showContactForm(id) {
+let c = null;
+if (id) {
+c = await api(`/api/contacts/${id}`);
+if (!c) return;
+}
+document.getElementById('modalTitle').textContent = id ? 'Modifier contact' : 'Nouveau contact';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Prenom</label><input type="text" id="cf-prenom" value="${c?.prenom || ''}"></div>
+<div class="form-group"><label>Nom</label><input type="text" id="cf-nom" value="${c?.nom || ''}"></div>
+<div class="form-group"><label>Qualite</label>
+<select id="cf-qualite">
+<option value="">-- Choisir --</option>
+${['referent','parent','ressource','enqueteur','journaliste','membre asso','benevole','donateur'].map(q =>
+`<option value="${q}" ${c?.qualite===q?'selected':''}>${q}</option>`).join('')}
+</select></div>
+<div class="form-group"><label>Telephone</label><input type="tel" id="cf-telephone" value="${c?.telephone || ''}"></div>
+<div class="form-group"><label>Email</label><input type="email" id="cf-email" value="${c?.email || ''}"></div>
+<div class="form-group"><label>Tags (separes par virgules)</label><input type="text" id="cf-tags" value="${c?.tags || ''}" placeholder="benevole, donateur, ..."></div>
+<div class="form-group"><label>Notes</label><textarea id="cf-notes">${c?.notes || ''}</textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveContact('${id || ''}')">Enregistrer</button>
+`;
+openModal();
+}
+
+async function saveContact(id) {
+const data = {
+prenom: document.getElementById('cf-prenom').value,
+nom: document.getElementById('cf-nom').value,
+qualite: document.getElementById('cf-qualite').value,
+telephone: document.getElementById('cf-telephone').value,
+email: document.getElementById('cf-email').value,
+tags: document.getElementById('cf-tags').value,
+notes: document.getElementById('cf-notes').value
+};
+try {
+if (id) {
+await api(`/api/contacts/${id}`, {method: 'PUT', body: data});
+} else {
+await api('/api/contacts', {method: 'POST', body: data});
+}
+closeModal();
+loadContacts();
+showToast('Contact enregistre');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+async function deleteContact(id) {
+if (!confirm('Supprimer ce contact ?')) return;
+try {
+await api(`/api/contacts/${id}`, {method: 'DELETE'});
+closeModal();
+loadContacts();
+showToast('Contact supprime');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+async function addHistoryNote(id) {
+const note = prompt('Note / action a enregistrer :');
+if (!note) return;
+try {
+await api(`/api/contacts/${id}/historique`, {method: 'POST', body: {action: 'note', details: note}});
+closeModal();
+showContactDetail(id);
+showToast('Note ajoutee');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function callPhone(tel) {
+window.location.href = 'tel:' + tel.replace(/\s/g, '');
+}
+
+function emailContact(id) {
+showView('emailing');
+emailContactIds = [id];
+emailRecipients = [];
+loadEmailContacts();
+renderEmailRecipients();
+}
+
+// ===== EVENEMENTS =====
+async function loadEvenements() {
+try {
+if (!allContacts.length) {
+allContacts = await api('/api/contacts');
+}
+const events = await api('/api/evenements');
+if (!events || events.length === 0) {
+document.getElementById('evenementsList').innerHTML = '<div class="empty"><div class="empty-icon">&#128197;</div>Aucun evenement</div>';
+return;
+}
+let html = '';
+for (const ev of events) {
+const isMember = currentRole === 'membre';
+html += `<div class="event-card">
+<div class="ec-date">${formatEventDate(ev.date)}${ev.heure ? " &agrave; " + esc(ev.heure) : ""}</div>
+<div class="ec-title">${esc(ev.titre)}</div>
+${ev.lieu ? `<div class="ec-lieu">&#128205; ${esc(ev.lieu)}</div>` : ''}
+${ev.description ? `<div class="ec-desc">${esc(ev.description)}</div>` : ''}
+${ev.participants && ev.participants.length ? `<div class="ec-participants">&#128101; ${ev.participants.map(pid => { const c = allContacts.find(x => x.id === pid); return c ? esc(c.prenom + ' ' + c.nom) : ''; }).filter(Boolean).join(', ')}</div>` : ''}
+${ev.rappel_envoye ? '<div style="font-size:.75rem;color:var(--green);margin-top:.2rem">&#9989; Rappel envoye</div>' : ''}
+${isMember ? renderMemberPresence(ev) : renderPresenceSection(ev)}
+<div style="font-size:.8rem;color:#888;margin-top:.5rem">Cree par ${esc(ev.cree_par)} le ${formatDate(ev.cree_le)}</div>
+<div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">
+${isMember ? `<button class="btn btn-secondary btn-sm" onclick="showEventPhotos('${ev.id}')">&#128247; Photos</button>` :
+`<button class="btn btn-secondary btn-sm" onclick="showEvenementForm('${ev.id}')">Modifier</button>
+<button class="btn btn-secondary btn-sm" onclick="showEventPhotos('${ev.id}')">&#128247; Photos</button>
+<button class="btn btn-secondary btn-sm" onclick="showPlanningForm('${ev.id}')">&#128197; Planning</button>
+<button class="btn btn-danger btn-sm" onclick="deleteEvenement('${ev.id}')">Supprimer</button>`}
+</div>
+</div>`;
+}
+document.getElementById('evenementsList').innerHTML = html;
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function formatEventDate(d) {
+if (!d) return '';
+const date = new Date(d);
+return date.toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+function showEvenementForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier evenement' : 'Nouvel evenement';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="ev-titre" placeholder="Reunion, action, etc."></div>
+<div class="form-group"><label>Date</label><input type="date" id="ev-date"></div>
+<div class="form-group"><label>Heure</label><input type="time" id="ev-heure"></div>
+<div class="form-group"><label>Lieu</label><input type="text" id="ev-lieu"></div>
+<div class="form-group"><label>Description</label><textarea id="ev-description"></textarea></div>
+<div class="form-group"><label>Participants</label><div id="ev-participants" style="max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:10px;padding:.5rem"></div></div>
+<button class="btn btn-primary btn-full" onclick="saveEvenement('${id || ''}')">Enregistrer</button>
+`;
+if (id) {
+loadEvenementForEdit(id);
+}
+loadEvenementParticipants(id);
+openModal();
+}
+
+async function loadEvenementForEdit(id) {
+try {
+const events = await api('/api/evenements');
+const ev = events.find(e => e.id === id);
+if (ev) {
+document.getElementById('ev-titre').value = ev.titre;
+document.getElementById('ev-date').value = ev.date;
+document.getElementById('ev-heure').value = ev.heure || '';
+document.getElementById('ev-lieu').value = ev.lieu || '';
+document.getElementById('ev-description').value = ev.description || '';
+// Cocher les participants existants
+const existing = ev.participants || [];
+const checkboxes = document.querySelectorAll('#ev-participants input[type=checkbox]');
+checkboxes.forEach(cb => { cb.checked = existing.includes(cb.value); });
+}
+} catch (e) { showToast(e.message); }
+}
+
+async function loadEvenementParticipants(id) {
+try {
+const contacts = await api('/api/contacts');
+let existing = [];
+if (id) {
+const events = await api('/api/evenements');
+const ev = events.find(e => e.id === id);
+if (ev) existing = ev.participants || [];
+}
+const container = document.getElementById('ev-participants');
+let html = '';
+for (const c of contacts) {
+const checked = existing.includes(c.id);
+html += `<label style="display:flex;align-items:center;gap:.5rem;padding:.4rem;border-bottom:1px solid #eee;cursor:pointer">
+<input type="checkbox" value="${esc(c.id)}" ${checked?'checked':''}>
+<span>${esc(c.prenom)} ${esc(c.nom)}</span>
+</label>`;
+}
+container.innerHTML = html;
+} catch (e) {}
+}
+
+async function saveEvenement(id) {
+const checked = Array.from(document.querySelectorAll('#ev-participants input[type=checkbox]:checked')).map(cb => cb.value);
+const data = {
+titre: document.getElementById('ev-titre').value,
+date: document.getElementById('ev-date').value,
+heure: document.getElementById('ev-heure').value,
+lieu: document.getElementById('ev-lieu').value,
+description: document.getElementById('ev-description').value,
+participants: checked
+};
+try {
+if (id) {
+await api(`/api/evenements/${id}`, {method: 'PUT', body: data});
+} else {
+await api('/api/evenements', {method: 'POST', body: data});
+}
+closeModal();
+loadEvenements();
+showToast('Evenement enregistre');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+async function deleteEvenement(id) {
+if (!confirm('Supprimer cet evenement ?')) return;
+try {
+await api(`/api/evenements/${id}`, {method: 'DELETE'});
+loadEvenements();
+showToast('Evenement supprime');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+// ===== EMAILING =====
+async function loadEmailContacts() {
+try {
+const contacts = await api('/api/contacts');
+allContacts = contacts;
+// Populate group dropdown with qualities
+const groupSelect = document.getElementById('emailGroupSelect');
+const qualites = [...new Set(contacts.map(c => c.qualite).filter(Boolean))].sort();
+let groupHtml = '<option value="">-- Choisir un groupe --</option>';
+groupHtml += '<option value="__all__">Tous les contacts (' + contacts.length + ')</option>';
+for (const q of qualites) {
+const count = contacts.filter(c => c.qualite === q).length;
+groupHtml += `<option value="${esc(q)}">${esc(q)} (${count})</option>`;
+}
+groupSelect.innerHTML = groupHtml;
+// Populate individual contact dropdown
+const contactSelect = document.getElementById('emailContactSelect');
+let contactHtml = '<option value="">-- Choisir un contact --</option>';
+for (const c of contacts) {
+contactHtml += `<option value="${esc(c.id)}">${esc(c.prenom)} ${esc(c.nom)} ${c.email ? '('+esc(c.email)+')' : '(sans email)'}</option>`;
+}
+contactSelect.innerHTML = contactHtml;
+} catch (e) {}
+}
+
+function selectEmailGroup(qualite) {
+if (!qualite) return;
+const contacts = allContacts;
+let selected = [];
+if (qualite === '__all__') {
+selected = contacts.filter(c => c.email).map(c => c.id);
+} else {
+selected = contacts.filter(c => c.qualite === qualite && c.email).map(c => c.id);
+}
+// Add to existing selection (merge, no duplicates)
+for (const id of selected) {
+if (!emailContactIds.includes(id)) {
+emailContactIds.push(id);
+}
+}
+// Reset group dropdown
+document.getElementById('emailGroupSelect').value = '';
+renderEmailRecipients();
+const groupName = qualite === '__all__' ? 'Tous' : qualite;
+showToast(selected.length + ' contact(s) ajoute(s) (' + groupName + ')');
+}
+
+function addContactByEmail(contactId) {
+if (!contactId) return;
+if (!emailContactIds.includes(contactId)) {
+emailContactIds.push(contactId);
+}
+document.getElementById('emailContactSelect').value = '';
+renderEmailRecipients();
+}
+
+function addRecipient() {
+const input = document.getElementById('emailRecipientInput');
+const email = input.value.trim();
+if (email && !emailRecipients.includes(email)) {
+emailRecipients.push(email);
+renderEmailRecipients();
+input.value = '';
+}
+}
+
+function removeRecipient(email) {
+emailRecipients = emailRecipients.filter(x => x !== email);
+renderEmailRecipients();
+}
+
+async function renderEmailRecipients() {
+const container = document.getElementById('emailRecipients');
+let html = '';
+for (const e of emailRecipients) {
+html += `<span class="email-recipient">${esc(e)} <span class="er-remove" onclick="removeRecipient('${esc(e)}')">&times;</span></span>`;
+}
+// Also show contacts selected (use allContacts to avoid API call)
+for (const id of emailContactIds) {
+const c = allContacts.find(x => x.id === id);
+if (c && c.email) {
+html += `<span class="email-recipient">${esc(c.email)} <span class="er-remove" onclick="removeEmailContact('${esc(id)}')">&times;</span></span>`;
+}
+}
+container.innerHTML = html;
+}
+
+function removeEmailContact(id) {
+emailContactIds = emailContactIds.filter(x => x !== id);
+renderEmailRecipients();
+}
+
+async function loadTemplate() {
+const tpl = document.getElementById('emailTemplate').value;
+if (!tpl) return;
+try {
+const templates = await api('/api/email/templates');
+const t = templates[tpl];
+if (t) {
+document.getElementById('emailSubject').value = t.subject;
+document.getElementById('emailBody').value = t.body;
+document.getElementById('emailHtml').checked = !!t.html;
+}
+} catch (e) {
+showToast(e.message);
+}
+}
+
+async function sendEmail() {
+const subject = document.getElementById('emailSubject').value;
+const body = document.getElementById('emailBody').value;
+const isHtml = document.getElementById('emailHtml').checked;
+if (!subject || !body) {
+showToast('Objet et message requis');
+return;
+}
+try {
+const res = await api('/api/email/send', {method: 'POST', body: {
+subject, body,
+recipients: emailRecipients,
+contact_ids: emailContactIds,
+html: isHtml
+}});
+if (res) {
+showToast(`Email envoye a ${res.count} destinataire(s)`);
+document.getElementById('emailSubject').value = '';
+document.getElementById('emailBody').value = '';
+document.getElementById('emailTemplate').value = '';
+emailRecipients = [];
+emailContactIds = [];
+renderEmailRecipients();
+loadEmailContacts();
+}
+} catch (e) {
+showToast(e.message);
+}
+}
+
+// ===== DOCUMENTS =====
+async function loadDocuments() {
+try {
+const docs = await api('/api/documents');
+if (!docs || docs.length === 0) {
+document.getElementById('documentsList').innerHTML = '<div class="empty"><div class="empty-icon">&#128206;</div>Aucun document</div>';
+return;
+}
+let html = '';
+for (const d of docs) {
+const icon = getDocIcon(d.filename);
+html += `<div class="doc-card">
+<div class="dc-icon">${icon}</div>
+<div class="dc-info">
+<div class="dc-name">${esc(d.nom)}</div>
+<div class="dc-meta">${esc(d.type_doc || '')} ${d.cree_par ? '| '+esc(d.cree_par) : ''} | ${formatDate(d.cree_le)}</div>
+</div>
+<div style="display:flex;gap:.3rem;flex-direction:column">
+<button class="btn btn-secondary btn-sm" onclick="downloadDoc('${esc(d.id)}')">Ouvrir</button>
+<button class="btn btn-danger btn-sm" onclick="deleteDoc('${esc(d.id)}')">&times;</button>
+</div>
+</div>`;
+}
+document.getElementById('documentsList').innerHTML = html;
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function getDocIcon(filename) {
+const ext = filename.split('.').pop().toLowerCase();
+if (['pdf'].includes(ext)) return '&#128196;';
+if (['doc','docx'].includes(ext)) return '&#128209;';
+if (['xls','xlsx'].includes(ext)) return '&#128202;';
+if (['jpg','jpeg','png','gif'].includes(ext)) return '&#128247;';
+if (['mp4','avi','mov'].includes(ext)) return '&#127909;';
+return '&#128206;';
+}
+
+function showDocUpload() {
+document.getElementById('modalTitle').textContent = 'Nouveau document';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Nom</label><input type="text" id="doc-nom" placeholder="Nom du document"></div>
+<div class="form-group"><label>Type</label>
+<select id="doc-type">
+<option value="">-- Optionnel --</option>
+<option value="statuts">Statuts</option>
+<option value="pv">Proces-verbal</option>
+<option value="rapport">Rapport</option>
+<option value="communication">Communication</option>
+<option value="finance">Document financier</option>
+<option value="autre">Autre</option>
+</select></div>
+<div class="form-group"><label>Description</label><input type="text" id="doc-desc" placeholder="Description courte"></div>
+<div class="form-group"><label>Fichier</label><input type="file" id="doc-file"></div>
+<button class="btn btn-primary btn-full" onclick="uploadDoc()">Televerser</button>
+`;
+openModal();
+}
+
+async function uploadDoc() {
+const fileInput = document.getElementById('doc-file');
+if (!fileInput.files[0]) {
+showToast('Selectionnez un fichier');
+return;
+}
+const formData = new FormData();
+formData.append('nom', document.getElementById('doc-nom').value);
+formData.append('type_doc', document.getElementById('doc-type').value);
+formData.append('description', document.getElementById('doc-desc').value);
+formData.append('file', fileInput.files[0]);
+try {
+const headers = {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+const res = await fetch('/api/documents', {method: 'POST', headers, body: formData});
+if (!res.ok) {
+const err = await res.json();
+throw new Error(err.detail || 'Erreur');
+}
+closeModal();
+loadDocuments();
+showToast('Document ajoute');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+async function downloadDoc(id) {
+const headers = {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+try {
+const res = await fetch(`/api/documents/${id}`, {headers});
+const blob = await res.blob();
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+const cd = res.headers.get('content-disposition') || '';
+const match = cd.match(/filename="?(.+)"?/);
+a.download = match ? match[1] : 'document';
+a.click();
+URL.revokeObjectURL(url);
+} catch (e) {
+showToast('Erreur telechargement');
+}
+}
+
+async function deleteDoc(id) {
+if (!confirm('Supprimer ce document ?')) return;
+try {
+await api(`/api/documents/${id}`, {method: 'DELETE'});
+loadDocuments();
+showToast('Document supprime');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+// ===== CALENDRIER EVENEMENTS =====
+let evViewMode = 'list';
+let calCurrentMois = 0;
+
+function setEvView(mode) {
+evViewMode = mode;
+document.getElementById('evenementsList').style.display = mode === 'list' ? 'block' : 'none';
+document.getElementById('evenementsCal').style.display = mode === 'cal' ? 'block' : 'none';
+document.getElementById('evViewList').style.background = mode === 'list' ? 'var(--pink)' : '';
+document.getElementById('evViewList').style.color = mode === 'list' ? '#fff' : '';
+document.getElementById('evViewCal').style.background = mode === 'cal' ? 'var(--pink)' : '';
+document.getElementById('evViewCal').style.color = mode === 'cal' ? '#fff' : '';
+if (mode === 'cal') loadCalendrier();
+}
+
+async function loadCalendrier() {
+try {
+const cal = await api('/api/evenements/calendrier?mois=' + calCurrentMois);
+const events = cal.events || [];
+const moisLabel = cal.mois_label_fr || cal.mois_label || '';
+const nbJours = cal.nb_jours || 30;
+// jour de la semaine du 1er (0=dimanche)
+const [y, m] = cal.mois_cible.split('-').map(Number);
+const firstDay = new Date(y, m - 1, 1).getDay();
+const offset = firstDay === 0 ? 6 : firstDay - 1; // lundi=0
+
+let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">';
+html += '<button class="btn btn-secondary btn-sm" onclick="calCurrentMois--; loadCalendrier()">&lt;</button>';
+html += '<div style="font-weight:600;text-transform:capitalize">' + esc(moisLabel) + '</div>';
+html += '<button class="btn btn-secondary btn-sm" onclick="calCurrentMois++; loadCalendrier()">&gt;</button>';
+html += '</div>';
+
+// Grille calendrier
+html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:.7rem;text-align:center;color:#999;margin-bottom:2px">';
+for (const j of ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']) {
+html += '<div>' + j + '</div>';
+}
+html += '</div>';
+html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+// Cellules vides
+for (let i = 0; i < offset; i++) {
+html += '<div style="min-height:50px;background:#f0f0f0;border-radius:4px"></div>';
+}
+// Jours
+const eventsByDay = {};
+for (const ev of events) {
+const d = ev.jour;
+if (!eventsByDay[d]) eventsByDay[d] = [];
+eventsByDay[d].push(ev);
+}
+const today = new Date();
+const isCurrentMonth = calCurrentMois === 0;
+for (let d = 1; d <= nbJours; d++) {
+const dayEvents = eventsByDay[d] || [];
+const isToday = isCurrentMonth && d === today.getDate();
+let cellBg = '#fff';
+let cellBorder = '1px solid #eee';
+if (isToday) { cellBg = '#f3e0f5'; cellBorder = '2px solid var(--pink)'; }
+let cellHtml = '<div style="min-height:50px;background:' + cellBg + ';border:' + cellBorder + ';border-radius:4px;padding:2px;overflow:hidden">';
+cellHtml += '<div style="font-size:.7rem;color:#888">' + d + '</div>';
+for (const ev of dayEvents) {
+cellHtml += '<div style="font-size:.65rem;background:var(--blue);color:#fff;border-radius:3px;padding:1px 3px;margin-top:2px;cursor:pointer" onclick="showEvenementForm(\'' + ev.id + '\')">' + esc(ev.titre) + '</div>';
+}
+cellHtml += '</div>';
+html += cellHtml;
+}
+html += '</div>';
+
+if (events.length === 0) {
+html += '<div style="text-align:center;color:#999;padding:1rem;font-size:.85rem">Aucun evenement ce mois-ci</div>';
+}
+
+document.getElementById('evenementsCal').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+// ===== STATS AVANCEES =====
+async function loadStatsAdvanced() {
+try {
+const adv = await api('/api/stats/advanced');
+if (!adv) return '';
+let html = '';
+// Cotisations par annee
+const cpa = adv.cotisations_par_annee || {};
+if (Object.keys(cpa).length > 0) {
+html += '<div class="stat-bar"><div style="font-weight:600;margin-bottom:.5rem">Cotisations par annee</div>';
+for (const [annee, data] of Object.entries(cpa).sort().reverse()) {
+html += '<div class="sb-row"><span>' + esc(annee) + '</span><span>' + data.paye + ' payees / ' + data.total + ' (' + data.montant.toFixed(2) + ' EUR)</span></div>';
+}
+html += '</div>';
+}
+// Participation aux evenements
+const part = adv.participation_evenements || [];
+if (part.length > 0) {
+html += '<div class="stat-bar"><div style="font-weight:600;margin-bottom:.5rem">Participation aux evenements</div>';
+for (const p of part) {
+const color = p.taux_presence >= 75 ? 'var(--green)' : (p.taux_presence >= 50 ? 'var(--orange)' : 'var(--red)');
+html += '<div class="sb-row"><span>' + esc(p.titre) + ' (' + esc(p.date) + ')</span><span style="color:' + color + '">' + p.presents + '/' + p.inscrits + ' (' + p.taux_presence + '%)</span></div>';
+}
+html += '</div>';
+}
+// Repartition par tags
+const tags = adv.tags_count || {};
+if (Object.keys(tags).length > 0) {
+html += '<div class="stat-bar"><div style="font-weight:600;margin-bottom:.5rem">Repartition par tags</div>';
+for (const [tag, n] of Object.entries(tags).sort((a,b) => b[1]-a[1])) {
+html += '<div class="sb-row"><span>' + esc(tag) + '</span><span>' + n + '</span></div>';
+}
+html += '</div>';
+}
+// Contacts sans cotisation
+html += '<div class="stat-bar"><div class="sb-row"><span>Contacts sans cotisation (' + new Date().getFullYear() + ')</span><span style="color:var(--red)">' + adv.contacts_sans_cotisation + '</span></div></div>';
+return html;
+} catch (e) { return ''; }
+}
+
+// ===== EXPORT =====
+async function exportExcel() {
+try {
+const headers = {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+const res = await fetch('/api/export/contacts-excel', {headers});
+if (!res.ok) throw new Error('Erreur export');
+const blob = await res.blob();
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'export_contacts_cotisations.xlsx';
+a.click();
+URL.revokeObjectURL(url);
+showToast('Export Excel telecharge');
+} catch (e) { showToast(e.message); }
+}
+
+async function exportIcs() {
+try {
+const headers = {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+const res = await fetch('/api/export/evenements-ics', {headers});
+if (!res.ok) throw new Error('Erreur export');
+const blob = await res.blob();
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'evenements_romy.ics';
+a.click();
+URL.revokeObjectURL(url);
+showToast('Calendrier .ics telecharge');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== COTISATIONS =====
+async function loadCotisations() {
+try {
+if (!allContacts.length) allContacts = await api('/api/contacts');
+const annee = document.getElementById('cotAnneeFilter').value;
+const cots = await api('/api/cotisations' + (annee ? '?annee=' + annee : ''));
+// Remplir le filtre annees
+const annees = [...new Set(cots.map(c => c.annee).filter(Boolean))].sort().reverse();
+const sel = document.getElementById('cotAnneeFilter');
+const current = sel.value;
+sel.innerHTML = '<option value="">Toutes annees</option>' + annees.map(a => `<option value="${esc(String(a))}" ${a===current?'selected':''}>${esc(String(a))}</option>`).join('');
+if (!cots || cots.length === 0) {
+document.getElementById('cotisationsList').innerHTML = '<div class="empty"><div class="empty-icon">&#128176;</div>Aucune cotisation</div>';
+return;
+}
+const contactById = {};
+for (const c of allContacts) contactById[c.id] = c;
+let html = '';
+for (const cot of cots) {
+const c = contactById[cot.contact_id] || {};
+const nom = esc((c.prenom || '') + ' ' + (c.nom || ''));
+const statutColor = cot.statut === 'paye' ? 'var(--green)' : (cot.statut === 'en_attente' ? 'var(--orange)' : 'var(--red)');
+html += `<div class="doc-card">
+<div class="dc-icon" style="color:${statutColor}">&#128176;</div>
+<div class="dc-info">
+<div class="dc-name">${nom} - ${esc(cot.annee)}</div>
+<div class="dc-meta">${cot.montant} EUR | ${esc(cot.statut)} | ${esc(cot.mode_paiement || '-')} | ${esc(cot.date_paiement || '-')}</div>
+</div>
+<div style="display:flex;gap:.3rem;flex-direction:column">
+<button class="btn btn-secondary btn-sm" onclick="showCotisationForm('${cot.id}')">Modif</button>
+<button class="btn btn-danger btn-sm" onclick="deleteCotisation('${cot.id}')">&times;</button>
+</div>
+</div>`;
+}
+document.getElementById('cotisationsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showCotisationForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier cotisation' : 'Nouvelle cotisation';
+const contactOptions = allContacts.map(c => `<option value="${c.id}">${esc(c.prenom)} ${esc(c.nom)}</option>`).join('');
+if (id) {
+// Charger la cotisation existante
+api('/api/cotisations').then(cots => {
+const cot = cots.find(c => c.id === id);
+if (!cot) return;
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Contact</label>
+<select id="cot-contact" disabled>
+<option value="${cot.contact_id}" selected>${escContactName(cot.contact_id)}</option>
+</select></div>
+<div class="form-group"><label>Annee</label><input type="text" id="cot-annee" value="${cot.annee}"></div>
+<div class="form-group"><label>Montant (EUR)</label><input type="number" step="0.01" id="cot-montant" value="${cot.montant}"></div>
+<div class="form-group"><label>Date paiement</label><input type="date" id="cot-date" value="${cot.date_paiement || ''}"></div>
+<div class="form-group"><label>Mode paiement</label>
+<select id="cot-mode">
+<option value="" ${!cot.mode_paiement?'selected':''}>--</option>
+<option value="especes" ${cot.mode_paiement==='especes'?'selected':''}>Especes</option>
+<option value="cheque" ${cot.mode_paiement==='cheque'?'selected':''}>Cheque</option>
+<option value="virement" ${cot.mode_paiement==='virement'?'selected':''}>Virement</option>
+</select></div>
+<div class="form-group"><label>Statut</label>
+<select id="cot-statut">
+<option value="paye" ${cot.statut==='paye'?'selected':''}>Paye</option>
+<option value="en_attente" ${cot.statut==='en_attente'?'selected':''}>En attente</option>
+<option value="impaye" ${cot.statut==='impaye'?'selected':''}>Impaye</option>
+</select></div>
+<div class="form-group"><label>Notes</label><input type="text" id="cot-notes" value="${esc(cot.notes || '')}"></div>
+<button class="btn btn-primary btn-full" onclick="saveCotisation('${id}')">Enregistrer</button>
+`;
+openModal();
+});
+} else {
+const currentYear = new Date().getFullYear();
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Contact</label>
+<select id="cot-contact">${contactOptions}</select></div>
+<div class="form-group"><label>Annee</label><input type="text" id="cot-annee" value="${currentYear}"></div>
+<div class="form-group"><label>Montant (EUR)</label><input type="number" step="0.01" id="cot-montant" value="0"></div>
+<div class="form-group"><label>Date paiement</label><input type="date" id="cot-date" value="${new Date().toISOString().split('T')[0]}"></div>
+<div class="form-group"><label>Mode paiement</label>
+<select id="cot-mode">
+<option value="">--</option>
+<option value="especes">Especes</option>
+<option value="cheque">Cheque</option>
+<option value="virement">Virement</option>
+</select></div>
+<div class="form-group"><label>Statut</label>
+<select id="cot-statut">
+<option value="paye">Paye</option>
+<option value="en_attente">En attente</option>
+<option value="impaye">Impaye</option>
+</select></div>
+<div class="form-group"><label>Notes</label><input type="text" id="cot-notes"></div>
+<button class="btn btn-primary btn-full" onclick="saveCotisation('')">Enregistrer</button>
+`;
+openModal();
+}
+}
+
+function escContactName(id) {
+const c = allContacts.find(x => x.id === id);
+return c ? (c.prenom + ' ' + c.nom) : id;
+}
+
+async function saveCotisation(id) {
+const data = {
+contact_id: document.getElementById('cot-contact').value,
+annee: document.getElementById('cot-annee').value,
+montant: parseFloat(document.getElementById('cot-montant').value) || 0,
+date_paiement: document.getElementById('cot-date').value,
+mode_paiement: document.getElementById('cot-mode').value,
+statut: document.getElementById('cot-statut').value,
+notes: document.getElementById('cot-notes').value
+};
+try {
+if (id) {
+await api(`/api/cotisations/${id}`, {method: 'PUT', body: data});
+} else {
+await api('/api/cotisations', {method: 'POST', body: data});
+}
+closeModal();
+loadCotisations();
+showToast('Cotisation enregistree');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteCotisation(id) {
+if (!confirm('Supprimer cette cotisation ?')) return;
+try {
+await api(`/api/cotisations/${id}`, {method: 'DELETE'});
+loadCotisations();
+showToast('Cotisation supprimee');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== PRESENCE (dans evenements) =====
+function renderMemberPresence(ev) {
+// For members: show a simple "Je viens" / "Je ne viens pas" button
+// Uses the member's contact_id from auth config
+// We need to know the member's contact_id — we'll get it from /auth/verify
+const myContactId = window.myContactId || '';
+if (!myContactId) {
+return '<div style="font-size:.8rem;color:#999;margin-top:.5rem;padding:.5rem;background:#f5f5f5;border-radius:8px">Contactez un referent pour etre ajoute aux participants.</div>';
+}
+const presence = ev.presence || {};
+const myStatus = presence[myContactId] || '';
+const statusLabel = myStatus === 'present' ? 'Present' : (myStatus === 'absent' ? 'Absent' : (myStatus === 'excuse' ? 'Excuse' : '--'));
+const statusColor = myStatus === 'present' ? 'var(--green)' : (myStatus === 'absent' ? 'var(--red)' : (myStatus === 'excuse' ? 'var(--orange)' : '#999'));
+return `<div style="margin-top:.5rem;padding:.75rem;background:var(--pink-light);border-radius:10px">
+<div style="font-size:.85rem;margin-bottom:.5rem">Ma presence: <strong style="color:${statusColor}">${statusLabel}</strong></div>
+<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+<button class="btn btn-green btn-sm ${myStatus==='present'?'active':''}" onclick="setMyPresence('${ev.id}','present')">Je viens !</button>
+<button class="btn btn-sm" style="background:#fff;color:var(--orange);border:1px solid var(--orange)" onclick="setMyPresence('${ev.id}','excuse')">Excuse(e)</button>
+<button class="btn btn-sm" style="background:#fff;color:var(--red);border:1px solid var(--red)" onclick="setMyPresence('${ev.id}','absent')">Absent(e)</button>
+</div>
+</div>`;
+}
+
+async function setMyPresence(evtId, status) {
+try {
+const contactId = window.myContactId || '';
+if (!contactId) { showToast('Aucun contact associe a votre compte'); return; }
+await api(`/api/evenements/${evtId}/presence`, {method: 'POST', body: {contact_id: contactId, presence: status}});
+showToast('Presence enregistree !');
+loadEvenements();
+} catch (e) { showToast(e.message); }
+}
+
+function renderPresenceSection(ev) {
+if (!ev.participants || ev.participants.length === 0) return '';
+const presence = ev.presence || {};
+let rows = '';
+for (const pid of ev.participants) {
+const c = allContacts.find(x => x.id === pid);
+const name = c ? esc(c.prenom + ' ' + c.nom) : pid;
+const status = presence[pid] || '';
+rows += `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid #eee">
+<span style="flex:1;font-size:.85rem">${name}</span>
+<select style="padding:4px 8px;border:1px solid #e0e0e0;border-radius:6px;font-size:.8rem" onchange="updatePresence('${ev.id}','${pid}',this.value)">
+<option value="" ${status===''?'selected':''}>--</option>
+<option value="present" ${status==='present'?'selected':''}>Present</option>
+<option value="absent" ${status==='absent'?'selected':''}>Absent</option>
+<option value="excuse" ${status==='excuse'?'selected':''}>Excuse</option>
+</select>
+</div>`;
+}
+return `<div class="section-collapse" onclick="toggleSection(this)">Presence <span class="sc-toggle">&#8964;</span></div>
+<div class="section-content collapsed"><div style="padding:.5rem 0">${rows}</div></div>`;
+}
+
+async function updatePresence(evtId, contactId, status) {
+try {
+const events = await api('/api/evenements');
+const ev = events.find(e => e.id === evtId);
+if (!ev) return;
+const presence = ev.presence || {};
+presence[contactId] = status;
+await api(`/api/evenements/${evtId}`, {method: 'PUT', body: {presence}});
+} catch (e) { showToast(e.message); }
+}
+
+// ===== TACHES =====
+async function loadTaches() {
+try {
+if (!allContacts.length) allContacts = await api('/api/contacts');
+const taches = await api('/api/taches');
+if (!taches || taches.length === 0) {
+document.getElementById('tachesList').innerHTML = '<div class="empty"><div class="empty-icon">&#9745;</div>Aucune tache</div>';
+return;
+}
+const contactById = {};
+for (const c of allContacts) contactById[c.id] = c;
+let html = '';
+for (const t of taches) {
+const assigne = t.assigne_a ? contactById[t.assigne_a] : null;
+const assigneNom = assigne ? esc(assigne.prenom + ' ' + assigne.nom) : '-';
+const prioColor = t.priorite === 'urgente' ? 'var(--red)' : (t.priorite === 'haute' ? 'var(--orange)' : '#888');
+const statutColor = t.statut === 'terminee' ? 'var(--green)' : (t.statut === 'en_cours' ? 'var(--blue)' : '#888');
+html += `<div class="doc-card">
+<div class="dc-icon" style="color:${statutColor}">${t.statut === 'terminee' ? '&#9989;' : '&#9744;'}</div>
+<div class="dc-info">
+<div class="dc-name">${esc(t.titre)}</div>
+<div class="dc-meta">${esc(t.echeance || 'Sans echeance')} | ${esc(t.priorite)} | ${assigneNom}</div>
+</div>
+<div style="display:flex;gap:.3rem;flex-direction:column">
+<button class="btn btn-secondary btn-sm" onclick="showTacheForm('${t.id}')">Modif</button>
+<button class="btn btn-danger btn-sm" onclick="deleteTache('${t.id}')">&times;</button>
+</div>
+</div>`;
+}
+document.getElementById('tachesList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showTacheForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier tache' : 'Nouvelle tache';
+const contactOptions = allContacts.map(c => `<option value="${c.id}">${esc(c.prenom)} ${esc(c.nom)}</option>`).join('');
+if (id) {
+api('/api/taches').then(taches => {
+const t = taches.find(x => x.id === id);
+if (!t) return;
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="tk-titre" value="${esc(t.titre)}"></div>
+<div class="form-group"><label>Description</label><input type="text" id="tk-desc" value="${esc(t.description || '')}"></div>
+<div class="form-group"><label>Assigner a</label><select id="tk-assigne"><option value="">--</option>${contactOptions}</select></div>
+<div class="form-group"><label>Echeance</label><input type="date" id="tk-echeance" value="${t.echeance || ''}"></div>
+<div class="form-group"><label>Priorite</label>
+<select id="tk-priorite">
+<option value="basse" ${t.priorite==='basse'?'selected':''}>Basse</option>
+<option value="normale" ${t.priorite==='normale'?'selected':''}>Normale</option>
+<option value="haute" ${t.priorite==='haute'?'selected':''}>Haute</option>
+<option value="urgente" ${t.priorite==='urgente'?'selected':''}>Urgente</option>
+</select></div>
+<div class="form-group"><label>Statut</label>
+<select id="tk-statut">
+<option value="a_faire" ${t.statut==='a_faire'?'selected':''}>A faire</option>
+<option value="en_cours" ${t.statut==='en_cours'?'selected':''}>En cours</option>
+<option value="terminee" ${t.statut==='terminee'?'selected':''}>Terminee</option>
+</select></div>
+<button class="btn btn-primary btn-full" onclick="saveTache('${id}')">Enregistrer</button>
+`;
+if (t.assigne_a) document.getElementById('tk-assigne').value = t.assigne_a;
+openModal();
+});
+} else {
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="tk-titre"></div>
+<div class="form-group"><label>Description</label><input type="text" id="tk-desc"></div>
+<div class="form-group"><label>Assigner a</label><select id="tk-assigne"><option value="">--</option>${contactOptions}</select></div>
+<div class="form-group"><label>Echeance</label><input type="date" id="tk-echeance"></div>
+<div class="form-group"><label>Priorite</label>
+<select id="tk-priorite">
+<option value="basse">Basse</option>
+<option value="normale" selected>Normale</option>
+<option value="haute">Haute</option>
+<option value="urgente">Urgente</option>
+</select></div>
+<button class="btn btn-primary btn-full" onclick="saveTache('')">Enregistrer</button>
+`;
+openModal();
+}
+}
+
+async function saveTache(id) {
+const data = {
+titre: document.getElementById('tk-titre').value,
+description: document.getElementById('tk-desc').value,
+assigne_a: document.getElementById('tk-assigne').value,
+echeance: document.getElementById('tk-echeance').value,
+priorite: document.getElementById('tk-priorite').value
+};
+if (id) data.statut = document.getElementById('tk-statut').value;
+try {
+if (id) {
+await api(`/api/taches/${id}`, {method: 'PUT', body: data});
+} else {
+await api('/api/taches', {method: 'POST', body: data});
+}
+closeModal();
+loadTaches();
+showToast('Tache enregistree');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteTache(id) {
+if (!confirm('Supprimer cette tache ?')) return;
+try {
+await api(`/api/taches/${id}`, {method: 'DELETE'});
+loadTaches();
+showToast('Tache supprimee');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== DONS / SPONSORS =====
+async function loadDons() {
+try {
+const dons = await api('/api/dons');
+if (!dons || dons.length === 0) {
+document.getElementById('donsList').innerHTML = '<div class="empty"><div class="empty-icon">&#127881;</div>Aucun don ou sponsor</div>';
+return;
+}
+let html = '';
+for (const d of dons) {
+const typeColor = d.type_don === 'sponsor' ? 'var(--orange)' : (d.type_don === 'subvention' ? 'var(--blue)' : 'var(--green)');
+html += `<div class="doc-card">
+<div class="dc-icon" style="color:${typeColor}">&#127881;</div>
+<div class="dc-info">
+<div class="dc-name">${esc(d.nom || 'Don anonyme')} - ${esc(d.type_don)}</div>
+<div class="dc-meta">${d.montant} EUR | ${esc(d.date || '-')} | ${esc(d.mode_paiement || '-')}</div>
+</div>
+<div style="display:flex;gap:.3rem;flex-direction:column">
+<button class="btn btn-danger btn-sm" onclick="deleteDon('${d.id}')">&times;</button>
+</div>
+</div>`;
+}
+document.getElementById('donsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showDonForm() {
+document.getElementById('modalTitle').textContent = 'Nouveau don / sponsor';
+const contactOptions = allContacts.map(c => `<option value="${c.id}">${esc(c.prenom)} ${esc(c.nom)}</option>`).join('');
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Contact (optionnel)</label><select id="dn-contact"><option value="">--</option>${contactOptions}</select></div>
+<div class="form-group"><label>Nom / Organisme</label><input type="text" id="dn-nom" placeholder="Nom du donateur ou sponsor"></div>
+<div class="form-group"><label>Montant (EUR)</label><input type="number" step="0.01" id="dn-montant" value="0"></div>
+<div class="form-group"><label>Date</label><input type="date" id="dn-date" value="${new Date().toISOString().split('T')[0]}"></div>
+<div class="form-group"><label>Mode paiement</label>
+<select id="dn-mode">
+<option value="">--</option>
+<option value="especes">Especes</option>
+<option value="cheque">Cheque</option>
+<option value="virement">Virement</option>
+</select></div>
+<div class="form-group"><label>Type</label>
+<select id="dn-type">
+<option value="don">Don</option>
+<option value="sponsor">Sponsor</option>
+<option value="subvention">Subvention</option>
+</select></div>
+<div class="form-group"><label>Notes</label><input type="text" id="dn-notes"></div>
+<button class="btn btn-primary btn-full" onclick="saveDon()">Enregistrer</button>
+`;
+openModal();
+}
+
+async function saveDon() {
+const data = {
+contact_id: document.getElementById('dn-contact').value,
+nom: document.getElementById('dn-nom').value,
+montant: parseFloat(document.getElementById('dn-montant').value) || 0,
+date: document.getElementById('dn-date').value,
+mode_paiement: document.getElementById('dn-mode').value,
+type_don: document.getElementById('dn-type').value,
+notes: document.getElementById('dn-notes').value
+};
+try {
+await api('/api/dons', {method: 'POST', body: data});
+closeModal();
+loadDons();
+showToast('Don enregistre');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteDon(id) {
+if (!confirm('Supprimer ce don ?')) return;
+try {
+await api(`/api/dons/${id}`, {method: 'DELETE'});
+loadDons();
+showToast('Don supprime');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== PHOTOS EVENEMENTS =====
+async function showEventPhotos(evtId) {
+try {
+const photos = await api(`/api/evenements/${evtId}/photos`);
+let html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin-bottom:1rem">';
+for (let i = 0; i < photos.length; i++) {
+html += `<div style="position:relative">
+<img src="/api/evenements/${evtId}/photos/${i}" style="width:100%;border-radius:8px" onerror="this.style.display='none'">
+<button class="btn btn-danger btn-sm" style="position:absolute;top:4px;right:4px;padding:2px 6px" onclick="deleteEventPhoto('${evtId}',${i})">&times;</button>
+</div>`;
+}
+html += '</div>';
+html += `<div class="form-group"><label>Ajouter une photo</label><input type="file" id="ev-photo-file" accept="image/*"></div>`;
+html += `<button class="btn btn-primary btn-full" onclick="uploadEventPhoto('${evtId}')">Televerser</button>`;
+document.getElementById('modalTitle').textContent = 'Photos evenement';
+document.getElementById('modalBody').innerHTML = html;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+async function uploadEventPhoto(evtId) {
+const fileInput = document.getElementById('ev-photo-file');
+if (!fileInput.files[0]) { showToast('Selectionnez une image'); return; }
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+try {
+const headers = {};
+if (token) headers['Authorization'] = 'Bearer ' + token;
+const res = await fetch(`/api/evenements/${evtId}/photos`, {method: 'POST', headers, body: formData});
+if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Erreur'); }
+showEventPhotos(evtId);
+showToast('Photo ajoutee');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteEventPhoto(evtId, idx) {
+if (!confirm('Supprimer cette photo ?')) return;
+try {
+await api(`/api/evenements/${evtId}/photos/${idx}`, {method: 'DELETE'});
+showEventPhotos(evtId);
+showToast('Photo supprimee');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== NOTIFICATIONS PUSH (PWA) =====
+function setupPushNotifications() {
+if (!('Notification' in window)) { return; }
+if (Notification.permission === 'granted') { return; }
+if (Notification.permission !== 'denied') {
+// Demander la permission au chargement
+setTimeout(() => {
+Notification.requestPermission().then(permission => {
+if (permission === 'granted') {
+new Notification('CRM Romy', {body: 'Notifications activees', icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&hearts;</text></svg>'});
+}
+});
+}, 3000);
+}
+}
+
+// ===== STATS =====
+async function loadStats() {
+try {
+const stats = await api('/api/stats');
+if (!stats) return;
+let qualiteHtml = '';
+for (const [q, n] of Object.entries(stats.par_qualite)) {
+qualiteHtml += `<div class="sb-row"><span>${esc(q)}</span><span>${n}</span></div>`;
+}
+document.getElementById('statsContent').innerHTML = `
+<div class="stat-grid">
+<div class="stat-card"><div class="sc-num">${stats.total_contacts}</div><div class="sc-label">Contacts</div></div>
+<div class="stat-card"><div class="sc-num">${stats.total_evenements}</div><div class="sc-label">Evenements</div></div>
+<div class="stat-card"><div class="sc-num">${stats.total_documents}</div><div class="sc-label">Documents</div></div>
+<div class="stat-card"><div class="sc-num">${stats.total_cotisations || 0}</div><div class="sc-label">Cotisations</div></div>
+</div>
+<div class="stat-grid">
+<div class="stat-card"><div class="sc-num">${stats.avec_email}</div><div class="sc-label">Avec email</div></div>
+<div class="stat-card"><div class="sc-num" style="color:var(--green)">${stats.cotisations_payees || 0}</div><div class="sc-label">Cotis. payees</div></div>
+<div class="stat-card"><div class="sc-num" style="color:var(--red)">${stats.cotisations_impayees || 0}</div><div class="sc-label">Cotis. impayees</div></div>
+<div class="stat-card"><div class="sc-num" style="color:var(--green)">${(stats.montant_cotisations || 0).toFixed(2)}</div><div class="sc-label">Montant cotis. (EUR)</div></div>
+</div>
+<div class="stat-grid">
+<div class="stat-card"><div class="sc-num" style="color:var(--green)">${stats.total_dons || 0}</div><div class="sc-label">Dons / Sponsors</div></div>
+<div class="stat-card"><div class="sc-num" style="color:var(--green)">${(stats.montant_dons || 0).toFixed(2)}</div><div class="sc-label">Montant dons (EUR)</div></div>
+<div class="stat-card"><div class="sc-num">${stats.total_taches || 0}</div><div class="sc-label">Taches</div></div>
+<div class="stat-card"><div class="sc-num" style="color:var(--orange)">${stats.taches_a_faire || 0}</div><div class="sc-label">Taches a faire</div></div>
+</div>
+<div class="stat-bar">
+<div style="font-weight:600;margin-bottom:.5rem">Repartition par qualite</div>
+${qualiteHtml}
+</div>
+<div class="stat-bar">
+<div class="sb-row"><span>Avec telephone</span><span>${stats.avec_telephone}</span></div>
+<div class="sb-row"><span>Sans email</span><span>${stats.sans_email}</span></div>
+</div>
+<div id="statsAdvanced"></div>
+`;
+// Charger les stats avancees en async
+loadStatsAdvanced().then(advHtml => {
+const adv = document.getElementById('statsAdvanced');
+if (adv) adv.innerHTML = advHtml;
+});
+} catch (e) {
+showToast(e.message);
+}
+}
+
+// ===== USERS (ADMIN) =====
+async function loadUsers() {
+if (currentRole !== 'admin') return;
+try {
+const users = await api('/auth/users');
+const contacts = await api('/api/contacts');
+const contactName = (cid) => { const c = contacts.find(x => x.id === cid); return c ? esc(c.prenom + ' ' + c.nom) : ''; };
+let html = '';
+for (const u of users) {
+const cName = u.contact_id ? contactName(u.contact_id) : '';
+html += `<div class="user-row">
+<div>
+<div class="ur-name">${esc(u.username)}</div>
+<span class="ur-role">${esc(u.role)}</span>
+${cName ? `<div style="font-size:.75rem;color:#888">Lie a: ${cName}</div>` : ''}
+</div>
+<div style="display:flex;gap:.3rem">
+<button class="btn btn-secondary btn-sm" onclick="showEditUser('${esc(u.username)}','${esc(u.role)}','${esc(u.contact_id||'')}')">Modifier</button>
+${u.username !== 'vincent' ? `<button class="btn btn-danger btn-sm" onclick="deleteUser('${esc(u.username)}')">&times;</button>` : ''}
+</div>
+</div>`;
+}
+document.getElementById('usersList').innerHTML = html;
+// Charger les feedbacks apres
+loadFeedbacks();
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function showAddUser() {
+document.getElementById('modalTitle').textContent = 'Nouvel utilisateur';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Nom d'utilisateur</label><input type="text" id="uu-username"></div>
+<div class="form-group"><label>Mot de passe</label><input type="text" id="uu-password"></div>
+<div class="form-group"><label>Role</label>
+<select id="uu-role" onchange="toggleContactLink(this.value)">
+<option value="referent">Referent (acces complet sauf gestion utilisateurs)</option>
+<option value="membre">Membre (contacts + agenda uniquement)</option>
+<option value="editeur">Editeur (legacy - acces complet)</option>
+<option value="admin">Admin (tout)</option>
+</select></div>
+<div class="form-group" id="contactLinkGroup" style="display:none">
+<label>Lie a un contact (requis pour les membres)</label>
+<select id="uu-contact-id"><option value="">-- Aucun --</option></select>
+</div>
+<button class="btn btn-primary btn-full" onclick="createUser()">Creer</button>
+`;
+loadContactOptions('uu-contact-id');
+openModal();
+}
+
+function toggleContactLink(role) {
+const group = document.getElementById('contactLinkGroup');
+if (group) group.style.display = (role === 'membre') ? 'block' : 'none';
+}
+
+async function loadContactOptions(selectId) {
+try {
+const contacts = await api('/api/contacts');
+const sel = document.getElementById(selectId);
+if (!sel) return;
+let html = '<option value="">-- Aucun --</option>';
+for (const c of contacts) {
+html += `<option value="${esc(c.id)}">${esc(c.prenom)} ${esc(c.nom)} (${esc(c.qualite||'-')})</option>`;
+}
+sel.innerHTML = html;
+} catch (e) {}
+}
+
+async function createUser() {
+try {
+const body = {
+username: document.getElementById('uu-username').value,
+password: document.getElementById('uu-password').value,
+role: document.getElementById('uu-role').value
+};
+const contactId = document.getElementById('uu-contact-id');
+if (contactId && contactId.value) body.contact_id = contactId.value;
+await api('/auth/users', {method: 'POST', body});
+closeModal();
+loadUsers();
+showToast('Utilisateur cree');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+function showEditUser(username, role, contactId) {
+document.getElementById('modalTitle').textContent = 'Modifier ' + username;
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Nouveau mot de passe (laisser vide = inchange)</label><input type="text" id="eu-password"></div>
+<div class="form-group"><label>Role</label>
+<select id="eu-role" onchange="toggleEditContactLink(this.value)">
+<option value="referent" ${role==='referent'?'selected':''}>Referent (acces complet sauf gestion utilisateurs)</option>
+<option value="membre" ${role==='membre'?'selected':''}>Membre (contacts + agenda uniquement)</option>
+<option value="editeur" ${role==='editeur'?'selected':''}>Editeur (legacy - acces complet)</option>
+<option value="admin" ${role==='admin'?'selected':''}>Admin (tout)</option>
+</select></div>
+<div class="form-group" id="editContactLinkGroup" style="display:${role==='membre'?'block':'none'}">
+<label>Lie a un contact (pour les membres)</label>
+<select id="eu-contact-id"><option value="">-- Aucun --</option></select>
+</div>
+<button class="btn btn-primary btn-full" onclick="updateUser('${username}')">Enregistrer</button>
+`;
+loadContactOptionsWithSelected('eu-contact-id', contactId || '');
+openModal();
+}
+
+function toggleEditContactLink(role) {
+const group = document.getElementById('editContactLinkGroup');
+if (group) group.style.display = (role === 'membre') ? 'block' : 'none';
+}
+
+async function loadContactOptionsWithSelected(selectId, selectedId) {
+try {
+const contacts = await api('/api/contacts');
+const sel = document.getElementById(selectId);
+if (!sel) return;
+let html = '<option value="">-- Aucun --</option>';
+for (const c of contacts) {
+html += `<option value="${esc(c.id)}" ${c.id===selectedId?'selected':''}>${esc(c.prenom)} ${esc(c.nom)} (${esc(c.qualite||'-')})</option>`;
+}
+sel.innerHTML = html;
+} catch (e) {}
+}
+
+async function updateUser(username) {
+const body = {};
+const pw = document.getElementById('eu-password').value;
+const role = document.getElementById('eu-role').value;
+if (pw) body.password = pw;
+if (role) body.role = role;
+const contactIdEl = document.getElementById('eu-contact-id');
+if (contactIdEl) body.contact_id = contactIdEl.value || '';
+try {
+await api(`/auth/users/${username}`, {method: 'PUT', body});
+closeModal();
+loadUsers();
+showToast('Utilisateur modifie');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+async function deleteUser(username) {
+if (!confirm("Supprimer l'utilisateur " + username + " ?")) return;
+try {
+await api(`/auth/users/${username}`, {method: 'DELETE'});
+loadUsers();
+showToast('Utilisateur supprime');
+} catch (e) {
+showToast(e.message);
+}
+}
+
+// ===== FEEDBACK =====
+function showFeedbackForm() {
+const activeView = document.querySelector('.view.active');
+const pageName = activeView ? activeView.id.replace('view-','') : '';
+document.getElementById('modalTitle').textContent = 'Signaler un bug / Suggestion';
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:1rem;padding:.8rem;background:var(--pink-light);border-radius:10px;font-size:.85rem">
+Vous avez trouve un bug ou une idee d amelioration ? Ecrivez votre message ci-dessous.
+Vincent sera notifie automatiquement par email.
+</div>
+<div class="form-group"><label>Type</label>
+<select id="fb-type">
+<option value="bug">Bug (quelque chose ne fonctionne pas)</option>
+<option value="suggestion">Suggestion d amelioration</option>
+<option value="autre">Autre</option>
+</select></div>
+<div class="form-group"><label>Message</label>
+<textarea id="fb-message" rows="5" placeholder="Decrivez le probleme ou votre suggestion..."></textarea></div>
+<div class="form-group"><label>Page concerne (optionnel)</label>
+<input type="text" id="fb-page" value="${esc(pageName)}" placeholder="Ex: contacts, evenements, ...">
+</div>
+<button class="btn btn-primary btn-full" onclick="submitFeedback()">Envoyer</button>
+`;
+openModal();
+}
+
+async function submitFeedback() {
+const type = document.getElementById('fb-type').value;
+const message = document.getElementById('fb-message').value.trim();
+const page = document.getElementById('fb-page').value.trim();
+if (!message) { showToast('Veuillez ecrire un message'); return; }
+try {
+await api('/api/feedback', {method: 'POST', body: {type, message, page}});
+closeModal();
+showToast('Merci ! Votre retour a ete envoye');
+} catch (e) { showToast(e.message); }
+}
+
+async function loadFeedbacks() {
+if (currentRole !== 'admin') return;
+try {
+const feedbacks = await api('/api/feedback');
+if (!feedbacks || feedbacks.length === 0) {
+document.getElementById('usersList').innerHTML = '<div class="empty"><div class="empty-icon">&#128172;</div>Aucun feedback</div>' + document.getElementById('usersList').innerHTML;
+return;
+}
+let html = '<h2 style="margin:1rem 0">Retours utilisateurs</h2>';
+for (const fb of feedbacks) {
+const typeColor = fb.type === 'bug' ? 'var(--red)' : (fb.type === 'suggestion' ? 'var(--orange)' : 'var(--blue)');
+const statutColor = fb.statut === 'resolu' ? 'var(--green)' : 'var(--red)';
+html += `<div class="doc-card">
+<div class="dc-icon" style="color:${typeColor}">${fb.type === 'bug' ? '&#128027;' : '&#128161;'}</div>
+<div class="dc-info">
+<div class="dc-name">${esc(fb.type)} - par ${esc(fb.user)}</div>
+<div class="dc-meta">${esc(fb.page || 'page non precisee')} | ${formatDate(fb.date)} | <span style="color:${statutColor}">${esc(fb.statut)}</span></div>
+<div style="margin-top:.3rem;font-size:.85rem">${esc(fb.message)}</div>
+</div>
+<div style="display:flex;gap:.3rem;flex-direction:column">
+<button class="btn btn-green btn-sm" onclick="resolveFeedback('${fb.id}')">Resoudre</button>
+<button class="btn btn-danger btn-sm" onclick="deleteFeedback('${fb.id}')">&times;</button>
+</div>
+</div>`;
+}
+// Inserer avant la liste des utilisateurs
+const usersList = document.getElementById('usersList');
+usersList.innerHTML = html + usersList.innerHTML;
+} catch (e) { showToast(e.message); }
+}
+
+async function resolveFeedback(id) {
+try {
+await api(`/api/feedback/${id}`, {method: 'PUT', body: {statut: 'resolu'}});
+loadUsers();
+showToast('Feedback resolu');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteFeedback(id) {
+if (!confirm('Supprimer ce feedback ?')) return;
+try {
+await api(`/api/feedback/${id}`, {method: 'DELETE'});
+loadUsers();
+showToast('Feedback supprime');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== MODAL =====
+function openModal() {
+document.getElementById('modalOverlay').classList.add('active');
+}
+
+function closeModal() {
+document.getElementById('modalOverlay').classList.remove('active');
+}
+
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+if (e.target === e.currentTarget) closeModal();
+});
+
+// ===== F1: IMPACT =====
+async function loadImpact() {
+try {
+const d = await api('/api/impact');
+let html = '<h2 style="margin-bottom:1rem">Tableau de bord d impact</h2>';
+// Big stat boxes
+html += '<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">';
+html += `<div class="stat-box"><div class="num">${d.contacts_total}</div><div class="lbl">Contacts</div></div>`;
+html += `<div class="stat-box"><div class="num">${d.benevoles_actifs}</div><div class="lbl">Benevoles actifs</div></div>`;
+html += `<div class="stat-box"><div class="num">${d.events_total}</div><div class="lbl">Evenements</div></div>`;
+html += `<div class="stat-box"><div class="num">${d.presence_total}</div><div class="lbl">Presences</div></div>`;
+html += `<div class="stat-box"><div class="num">${d.accomp_total}</div><div class="lbl">Accompagnements</div></div>`;
+html += `<div class="stat-box"><div class="num">${d.accomp_actifs}</div><div class="lbl">Accomp. actifs</div></div>`;
+html += `<div class="stat-box"><div class="num">${d.dons_total.toFixed(0)} eur</div><div class="lbl">Dons total</div></div>`;
+html += '</div>';
+// Contacts par qualite (bar chart CSS)
+html += '<h3>Contacts par qualite</h3><div style="margin-bottom:1rem">';
+const maxQ = Math.max(...Object.values(d.contacts_par_qualite), 1);
+for (const [q, n] of Object.entries(d.contacts_par_qualite)) {
+const pct = (n / maxQ * 100).toFixed(0);
+html += `<div style="margin-bottom:.3rem"><span style="font-size:.8rem;display:inline-block;width:120px">${esc(q)}</span><div style="display:inline-block;height:20px;background:var(--pink);border-radius:4px;width:${pct}%;min-width:${n*3}px;vertical-align:middle"></div> <span style="font-size:.8rem;font-weight:bold">${n}</span></div>`;
+}
+html += '</div>';
+// Dons par mois
+html += '<h3>Dons par mois</h3><div style="margin-bottom:1rem">';
+const mois = Object.keys(d.dons_par_mois).sort();
+const maxD = Math.max(...Object.values(d.dons_par_mois), 1);
+for (const m of mois.slice(-12)) {
+const v = d.dons_par_mois[m];
+const pct = (v / maxD * 100).toFixed(0);
+html += `<div style="margin-bottom:.2rem"><span style="font-size:.75rem;display:inline-block;width:80px">${esc(m)}</span><div style="display:inline-block;height:16px;background:var(--green);border-radius:4px;width:${pct}%;min-width:${v/5}px;vertical-align:middle"></div> <span style="font-size:.75rem;font-weight:bold">${v} eur</span></div>`;
+}
+html += '</div>';
+// Cotisations par annee
+html += '<h3>Cotisations par annee</h3><div>';
+for (const [an, v] of Object.entries(d.cots_par_annee).sort().reverse()) {
+html += `<div style="margin-bottom:.2rem"><span style="font-size:.8rem;display:inline-block;width:80px">${esc(an)}</span><div style="display:inline-block;height:16px;background:var(--blue);border-radius:4px;width:${v/2}px;vertical-align:middle"></div> <span style="font-size:.8rem;font-weight:bold">${v} eur</span></div>`;
+}
+html += '</div>';
+document.getElementById('impactContent').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+// ===== F2: CARTOGRAPHIE =====
+async function loadCarte() {
+try {
+const d = await api('/api/cartographie');
+const filterQ = document.getElementById('carteFilterQualite').value;
+let points = d.points;
+// Populate filter if empty
+const sel = document.getElementById('carteFilterQualite');
+if (sel.children.length <= 1) {
+const qualites = [...new Set(d.points.map(p => p.qualite).filter(Boolean))].sort();
+for (const q of qualites) {
+sel.appendChild(new Option(q, q));
+}
+}
+if (filterQ) points = points.filter(p => p.qualite === filterQ);
+// Simple list-based display (no Leaflet to keep it lightweight)
+let html = `<div style="margin-bottom:.5rem;font-size:.85rem;color:#888">${points.length} contacts localises</div>`;
+// Group by code postal
+const byCp = {};
+for (const p of points) {
+const cp = p.code_postal || '---';
+if (!byCp[cp]) byCp[cp] = [];
+byCp[cp].push(p);
+}
+const sortedCps = Object.keys(byCp).sort();
+for (const cp of sortedCps) {
+const dept = cp.substring(0, 2);
+html += `<div style="margin-bottom:.8rem;padding:.6rem;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.1)">`;
+html += `<div style="font-weight:bold;color:var(--pink);font-size:.9rem;margin-bottom:.3rem">${cp} ${byCp[cp][0].ville || ''}</div>`;
+for (const p of byCp[cp]) {
+html += `<div style="font-size:.8rem;padding:.2rem 0"><span style="font-weight:600">${esc(p.nom)}</span> ${p.qualite ? '<span style="color:var(--pink)">'+esc(p.qualite)+'</span>' : ''} ${p.telephone ? ' &middot; '+esc(p.telephone) : ''}</div>`;
+}
+html += '</div>';
+}
+document.getElementById('carteContent').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+// ===== F3: ACCOMPAGNEMENTS =====
+async function loadAccompagnements() {
+try {
+const statut = document.getElementById('accompFilterStatut').value;
+const url = '/api/accompagnements' + (statut ? '?statut=' + statut : '');
+const accomps = await api(url);
+if (!accomps || accomps.length === 0) {
+document.getElementById('accompagnementsList').innerHTML = '<div class="empty"><div class="empty-icon">&#128106;</div>Aucun accompagnement</div>';
+return;
+}
+let html = '';
+for (const a of accomps) {
+const prioColor = a.priorite === 'urgente' ? 'var(--red)' : (a.priorite === 'haute' ? 'var(--orange)' : '#888');
+const statutColor = a.statut === 'actif' ? 'var(--green)' : (a.statut === 'suspendu' ? 'var(--orange)' : '#999');
+html += `<div class="contact-card" onclick="showAccompDetail('${a.id}')">
+<div class="cc-top">
+<div class="cc-info">
+<div class="cc-name">${esc(a.contact_nom)}</div>
+<div class="cc-meta">${esc(a.type_suivi)} ${a.date_debut ? ' &middot; ' + esc(a.date_debut) : ''}</div>
+<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:.75rem;background:${statutColor};color:#fff;margin-top:.2rem">${esc(a.statut)}</span>
+<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:.75rem;background:${prioColor};color:#fff;margin-top:.2rem">${esc(a.priorite)}</span>
+</div>
+</div>
+</div>`;
+}
+document.getElementById('accompagnementsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showAccompagnementForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier accompagnement' : 'Nouvel accompagnement';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Contact accompagne</label><select id="acc-contact-id"></select></div>
+<div class="form-group"><label>Type de suivi</label>
+<select id="acc-type">
+<option value="accompagnement">Accompagnement</option>
+<option value="suivi famille">Suivi famille</option>
+<option value="orientation">Orientation</option>
+<option value="signalement">Signalement</option>
+</select></div>
+<div class="form-group"><label>Date debut</label><input type="date" id="acc-date-debut"></div>
+<div class="form-group"><label>Date fin (optionnel)</label><input type="date" id="acc-date-fin"></div>
+<div class="form-group"><label>Statut</label>
+<select id="acc-statut"><option value="actif">Actif</option><option value="suspendu">Suspendu</option><option value="clos">Clos</option></select></div>
+<div class="form-group"><label>Priorite</label>
+<select id="acc-priorite"><option value="basse">Basse</option><option value="normale" selected>Normale</option><option value="haute">Haute</option><option value="urgente">Urgente</option></select></div>
+<div class="form-group"><label>Notes partagees</label><textarea id="acc-notes" rows="3"></textarea></div>
+${currentRole === 'admin' ? '<div class="form-group"><label>Notes confidentielles (admin only)</label><textarea id="acc-conf" rows="3"></textarea></div>' : ''}
+<button class="btn btn-primary btn-full" onclick="saveAccompagnement('${id||''}')">Enregistrer</button>`;
+loadContactOptions('acc-contact-id');
+openModal();
+}
+
+async function saveAccompagnement(id) {
+const body = {
+contact_id: document.getElementById('acc-contact-id').value,
+type_suivi: document.getElementById('acc-type').value,
+date_debut: document.getElementById('acc-date-debut').value,
+date_fin: document.getElementById('acc-date-fin').value,
+statut: document.getElementById('acc-statut').value,
+priorite: document.getElementById('acc-priorite').value,
+notes_partagees: document.getElementById('acc-notes').value,
+};
+const conf = document.getElementById('acc-conf');
+if (conf) body.notes_confidentielles = conf.value;
+try {
+if (id) {
+await api('/api/accompagnements/' + id, {method: 'PUT', body});
+} else {
+await api('/api/accompagnements', {method: 'POST', body});
+}
+closeModal();
+loadAccompagnements();
+showToast('Accompagnement enregistre');
+} catch (e) { showToast(e.message); }
+}
+
+async function showAccompDetail(id) {
+try {
+const accomps = await api('/api/accompagnements');
+const a = accomps.find(x => x.id === id);
+if (!a) return;
+const notesHtml = (a.notes_historique || []).slice().reverse().map(n => {
+const d = new Date(n.date);
+return `<div class="history-entry"><span class="he-user">${esc(n.user)}</span> <span class="he-date">${d.toLocaleDateString('fr-FR')}</span><div class="he-action">${n.confidentiel ? '[CONFIDENTIEL] ' : ''}${esc(n.note)}</div></div>`;
+}).join('');
+document.getElementById('modalTitle').textContent = a.contact_nom;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Type:</strong> ${esc(a.type_suivi)}</div>
+<div style="margin-bottom:.5rem"><strong>Statut:</strong> ${esc(a.statut)} | <strong>Priorite:</strong> ${esc(a.priorite)}</div>
+<div style="margin-bottom:.5rem"><strong>Debut:</strong> ${esc(a.date_debut||'-')} | <strong>Fin:</strong> ${esc(a.date_fin||'-')}</div>
+${a.notes_partagees ? `<div style="margin-bottom:.5rem"><strong>Notes partagees:</strong><br>${esc(a.notes_partagees)}</div>` : ''}
+${a.notes_confidentielles ? `<div style="margin-bottom:.5rem;color:var(--red)"><strong>Notes confidentielles:</strong><br>${esc(a.notes_confidentielles)}</div>` : ''}
+<div class="section-collapse" onclick="toggleSection(this)">Notes historique (${(a.notes_historique||[]).length}) <span class="sc-toggle">&#8964;</span></div>
+<div class="section-content"><div class="history-list">${notesHtml || '<div style="padding:.5rem;color:#999">Aucune note</div>'}</div></div>
+<div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+<button class="btn btn-primary btn-sm" onclick="showAccompagnementForm('${a.id}')">Modifier</button>
+<button class="btn btn-secondary btn-sm" onclick="addAccompNote('${a.id}')">+ Note</button>
+<button class="btn btn-danger btn-sm" onclick="deleteAccomp('${a.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+async function addAccompNote(id) {
+document.getElementById('modalTitle').textContent = 'Ajouter une note';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Note</label><textarea id="acc-note-text" rows="4" placeholder="Saisissez votre note..."></textarea></div>
+${currentRole === 'admin' ? '<div class="form-group"><label><input type="checkbox" id="acc-note-conf"> Confidentiel (admin only)</label></div>' : ''}
+<button class="btn btn-primary btn-full" onclick="saveAccompNote('${id}')">Ajouter</button>`;
+openModal();
+}
+
+async function saveAccompNote(id) {
+const note = document.getElementById('acc-note-text').value;
+const confEl = document.getElementById('acc-note-conf');
+const conf = confEl ? confEl.checked : false;
+try {
+await api('/api/accompagnements/' + id + '/notes', {method: 'POST', body: {note, confidentiel: conf}});
+closeModal();
+showToast('Note ajoutee');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteAccomp(id) {
+if (!confirm('Supprimer cet accompagnement ?')) return;
+try {
+await api('/api/accompagnements/' + id, {method: 'DELETE'});
+closeModal();
+loadAccompagnements();
+showToast('Accompagnement supprime');
+} catch (e) { showToast(e.message); }
+}
+
+// ===== F4: PLANNING (integre dans evenements) =====
+async function loadPlanningForEvent(evtId) {
+try {
+const planning = await api('/api/planning?evenement_id=' + evtId);
+return planning;
+} catch (e) { return []; }
+}
+
+async function showPlanningForm(evtId) {
+const planning = await loadPlanningForEvent(evtId);
+let html = `<div style="margin-bottom:1rem">`;
+for (const p of planning) {
+html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid #eee">
+<span>${esc(p.contact_nom)} (${esc(p.role)}) ${p.creneau ? '['+esc(p.creneau)+']' : ''}</span>
+<button class="btn btn-danger btn-sm" onclick="removePlanning('${p.id}','${evtId}')">&times;</button>
+</div>`;
+}
+html += '</div>';
+html += `<div class="form-group"><label>Benevole</label><select id="plan-contact"></select></div>
+<div class="form-group"><label>Role</label>
+<select id="plan-role"><option value="participant">Participant</option><option value="responsable">Responsable</option><option value="animateur">Animateur</option><option value="logistique">Logistique</option></select></div>
+<div class="form-group"><label>Creneau (optionnel)</label><input type="text" id="plan-creneau" placeholder="ex: 09:00-12:00"></div>
+<button class="btn btn-primary btn-full" onclick="savePlanning('${evtId}')">Ajouter au planning</button>`;
+document.getElementById('modalTitle').textContent = 'Planning benevoles';
+document.getElementById('modalBody').innerHTML = html;
+loadContactOptions('plan-contact');
+openModal();
+}
+
+async function savePlanning(evtId) {
+try {
+await api('/api/planning', {method: 'POST', body: {
+evenement_id: evtId,
+contact_id: document.getElementById('plan-contact').value,
+role: document.getElementById('plan-role').value,
+creneau: document.getElementById('plan-creneau').value
+}});
+showPlanningForm(evtId);
+showToast('Benevole ajoute au planning');
+} catch (e) { showToast(e.message); }
+}
+
+async function removePlanning(planId, evtId) {
+try {
+await api('/api/planning/' + planId, {method: 'DELETE'});
+showPlanningForm(evtId);
+} catch (e) { showToast(e.message); }
+}
+
+// ===== F5: RAPPORT =====
+function openRapport() {
+const year = prompt('Annee du rapport (par defaut: ' + new Date().getFullYear() + '):', new Date().getFullYear());
+if (year === null) return;
+const y = year || new Date().getFullYear();
+window.open('/api/rapport-activite?annee=' + y + '&token=' + token, '_blank');
+}
+
+// ===== F6: NOTES DE FRAIS =====
+async function loadFrais() {
+try {
+const [notes, totals] = await Promise.all([api('/api/notes-frais'), api('/api/notes-frais/total')]);
+let sumHtml = '<div style="display:flex;flex-wrap:wrap;gap:.5rem">';
+sumHtml += `<div class="stat-box"><div class="num">${totals.total.toFixed(0)} eur</div><div class="lbl">Total</div></div>`;
+sumHtml += `<div class="stat-box"><div class="num">${totals.en_attente.toFixed(0)} eur</div><div class="lbl">En attente</div></div>`;
+sumHtml += `<div class="stat-box"><div class="num">${totals.valide.toFixed(0)} eur</div><div class="lbl">Validees</div></div>`;
+sumHtml += `<div class="stat-box"><div class="num">${totals.rembourse.toFixed(0)} eur</div><div class="lbl">Remboursees</div></div>`;
+sumHtml += '</div>';
+document.getElementById('fraisSummary').innerHTML = sumHtml;
+if (!notes || notes.length === 0) {
+document.getElementById('fraisList').innerHTML = '<div class="empty">Aucune note de frais</div>';
+return;
+}
+let html = '';
+for (const n of notes) {
+const statutColor = n.statut === 'valide' ? 'var(--green)' : (n.statut === 'rembourse' ? 'var(--blue)' : 'var(--orange)');
+html += `<div class="contact-card" onclick="showFraisDetail('${n.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${n.date || '-'} ${n.contact_nom}</div>
+<div class="cc-meta">${n.montant} eur ${n.categorie ? '('+esc(n.categorie)+')' : ''} ${n.description ? esc(n.description.substring(0,50)) : ''}</div>
+<span style="background:${statutColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">${esc(n.statut)}</span>
+</div></div></div>`;
+}
+document.getElementById('fraisList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showFraisForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier note de frais' : 'Nouvelle note de frais';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Qui a engage la depense</label><select id="nf-contact"><option value="">-- Aucun --</option></select></div>
+<div class="form-group"><label>Date</label><input type="date" id="nf-date"></div>
+<div class="form-group"><label>Montant (EUR)</label><input type="number" step="0.01" id="nf-montant" placeholder="0.00"></div>
+<div class="form-group"><label>Categorie</label>
+<select id="nf-categorie"><option value="deplacement">Deplacement</option><option value="repas">Repas</option><option value="fournitures">Fournitures</option><option value="communication">Communication</option><option value="autre">Autre</option></select></div>
+<div class="form-group"><label>Description</label><textarea id="nf-description" rows="2"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveFrais('${id||''}')">Enregistrer</button>`;
+loadContactOptions('nf-contact');
+openModal();
+}
+
+async function saveFrais(id) {
+const body = {
+contact_id: document.getElementById('nf-contact').value,
+date: document.getElementById('nf-date').value,
+montant: parseFloat(document.getElementById('nf-montant').value) || 0,
+categorie: document.getElementById('nf-categorie').value,
+description: document.getElementById('nf-description').value
+};
+try {
+if (id) { await api('/api/notes-frais/'+id, {method:'PUT', body}); }
+else { await api('/api/notes-frais', {method:'POST', body}); }
+closeModal(); loadFrais(); showToast('Note de frais enregistree');
+} catch (e) { showToast(e.message); }
+}
+
+async function showFraisDetail(id) {
+try {
+const notes = await api('/api/notes-frais');
+const n = notes.find(x => x.id === id);
+if (!n) return;
+document.getElementById('modalTitle').textContent = 'Note de frais';
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Date:</strong> ${esc(n.date||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Par:</strong> ${esc(n.contact_nom||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Montant:</strong> ${n.montant} eur</div>
+<div style="margin-bottom:.5rem"><strong>Categorie:</strong> ${esc(n.categorie||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Description:</strong><br>${esc(n.description||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Statut:</strong> ${esc(n.statut)}</div>
+<div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+<button class="btn btn-green btn-sm" onclick="validerFrais('${n.id}')">Valider</button>
+<button class="btn btn-blue btn-sm" onclick="rembourserFrais('${n.id}')">Marquer rembourse</button>
+<button class="btn btn-primary btn-sm" onclick="showFraisForm('${n.id}')">Modifier</button>
+<button class="btn btn-danger btn-sm" onclick="deleteFrais('${n.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+async function validerFrais(id) { try { await api('/api/notes-frais/'+id, {method:'PUT', body:{statut:'valide'}}); closeModal(); loadFrais(); showToast('Note validee'); } catch(e){ showToast(e.message); } }
+async function rembourserFrais(id) { try { await api('/api/notes-frais/'+id, {method:'PUT', body:{statut:'rembourse'}}); closeModal(); loadFrais(); showToast('Note remboursee'); } catch(e){ showToast(e.message); } }
+async function deleteFrais(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/notes-frais/'+id, {method:'DELETE'}); closeModal(); loadFrais(); } catch(e){ showToast(e.message); } }
+
+// ===== F7: ECHEANCES =====
+async function loadEcheances() {
+try {
+const echeances = await api('/api/echeances');
+if (!echeances || echeances.length === 0) {
+document.getElementById('echeancesList').innerHTML = '<div class="empty">Aucune echeance</div>';
+return;
+}
+let html = '';
+for (const e of echeances) {
+const statutColor = e.statut === 'en_retard' ? 'var(--red)' : (e.statut === 'fait' ? 'var(--green)' : 'var(--blue)');
+const typeIcon = {administratif:'&#128203;', fiscal:'&#128176;', assurance:'&#9989;', ag:'&#127779;', reunion:'&#128101;', autre:'&#128221;'}[e.type_echeance] || '&#128221;';
+html += `<div class="contact-card" onclick="showEcheanceDetail('${e.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${typeIcon} ${esc(e.titre)}</div>
+<div class="cc-meta">${e.date || '-'} ${e.recursif ? '('+esc(e.recursif)+')' : ''} ${e.responsable ? ' &middot; '+esc(e.responsable) : ''}</div>
+<span style="background:${statutColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">${esc(e.statut)}</span>
+</div></div></div>`;
+}
+document.getElementById('echeancesList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showEcheanceForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier echeance' : 'Nouvelle echeance';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="ech-titre" placeholder="Ex: Assurance RC, AG annuelle..."></div>
+<div class="form-group"><label>Date</label><input type="date" id="ech-date"></div>
+<div class="form-group"><label>Type</label>
+<select id="ech-type"><option value="administratif">Administratif</option><option value="fiscal">Fiscal</option><option value="assurance">Assurance</option><option value="ag">AG</option><option value="reunion">Reunion</option><option value="autre">Autre</option></select></div>
+<div class="form-group"><label>Recurrence</label>
+<select id="ech-recursif"><option value="">Ponctuel</option><option value="mensuel">Mensuel</option><option value="annuel">Annuel</option></select></div>
+<div class="form-group"><label>Responsable</label><input type="text" id="ech-responsable"></div>
+<div class="form-group"><label>Description</label><textarea id="ech-description" rows="2"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveEcheance('${id||''}')">Enregistrer</button>`;
+openModal();
+}
+
+async function saveEcheance(id) {
+const body = {
+titre: document.getElementById('ech-titre').value,
+date: document.getElementById('ech-date').value,
+type_echeance: document.getElementById('ech-type').value,
+recursif: document.getElementById('ech-recursif').value,
+responsable: document.getElementById('ech-responsable').value,
+description: document.getElementById('ech-description').value
+};
+try {
+if (id) { await api('/api/echeances/'+id, {method:'PUT', body}); }
+else { await api('/api/echeances', {method:'POST', body}); }
+closeModal(); loadEcheances(); showToast('Echeance enregistree');
+} catch (e) { showToast(e.message); }
+}
+
+async function showEcheanceDetail(id) {
+try {
+const echeances = await api('/api/echeances');
+const e = echeances.find(x => x.id === id);
+if (!e) return;
+document.getElementById('modalTitle').textContent = e.titre;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Date:</strong> ${esc(e.date||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Type:</strong> ${esc(e.type_echeance)} ${e.recursif ? '('+esc(e.recursif)+')' : ''}</div>
+<div style="margin-bottom:.5rem"><strong>Responsable:</strong> ${esc(e.responsable||'-')}</div>
+${e.description ? `<div style="margin-bottom:.5rem"><strong>Description:</strong><br>${esc(e.description)}</div>` : ''}
+<div style="margin-bottom:.5rem"><strong>Statut:</strong> ${esc(e.statut)}</div>
+<div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+<button class="btn btn-green btn-sm" onclick="marquerEcheanceFait('${e.id}')">Marquer fait</button>
+<button class="btn btn-primary btn-sm" onclick="showEcheanceForm('${e.id}')">Modifier</button>
+<button class="btn btn-danger btn-sm" onclick="deleteEcheance('${e.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+async function marquerEcheanceFait(id) { try { await api('/api/echeances/'+id, {method:'PUT', body:{statut:'fait'}}); closeModal(); loadEcheances(); showToast('Echeance marquee faite'); } catch(e){ showToast(e.message); } }
+async function deleteEcheance(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/echeances/'+id, {method:'DELETE'}); closeModal(); loadEcheances(); } catch(e){ showToast(e.message); } }
+
+// ===== F8: REGISTRE DES APPELS =====
+async function loadAppels() {
+try {
+const appels = await api('/api/registre-appels');
+if (!appels || appels.length === 0) {
+document.getElementById('appelsList').innerHTML = '<div class="empty">Aucun appel enregistre</div>';
+return;
+}
+let html = '';
+for (const a of appels) {
+const motifColor = a.motif === 'signalement' ? 'var(--red)' : (a.motif === 'demande aide' ? 'var(--orange)' : 'var(--blue)');
+html += `<div class="contact-card" onclick="showAppelDetail('${a.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${a.date_appel || '-'} ${a.nom_appelant || ''}</div>
+<div class="cc-meta">${a.heure ? esc(a.heure)+' ' : ''}${esc(a.motif||'')} ${a.nom_appele ? '&rarr; '+esc(a.nom_appele) : ''}</div>
+<span style="background:${motifColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">${esc(a.motif||'-')}</span>
+</div></div></div>`;
+}
+document.getElementById('appelsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showAppelForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier appel' : 'Nouvel appel';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Qui a appele</label><input type="text" id="app-appelant" placeholder="Nom de l appelant"></div>
+<div class="form-group"><label>Qui a repondu</label><input type="text" id="app-appele" placeholder="Nom de l appele"></div>
+<div class="form-group"><label>Date</label><input type="date" id="app-date"></div>
+<div class="form-group"><label>Heure</label><input type="time" id="app-heure"></div>
+<div class="form-group"><label>Motif</label>
+<select id="app-motif"><option value="information">Information</option><option value="demande aide">Demande d aide</option><option value="signalement">Signalement</option><option value="suivi">Suivi</option><option value="autre">Autre</option></select></div>
+<div class="form-group"><label>Description</label><textarea id="app-description" rows="3"></textarea></div>
+<div class="form-group"><label>Suite donnee</label><textarea id="app-suite" rows="2"></textarea></div>
+<div class="form-group"><label>Liens a un contact (optionnel)</label><select id="app-contact"><option value="">-- Aucun --</option></select></div>
+<button class="btn btn-primary btn-full" onclick="saveAppel('${id||''}')">Enregistrer</button>`;
+loadContactOptions('app-contact');
+openModal();
+}
+
+async function saveAppel(id) {
+const body = {
+nom_appelant: document.getElementById('app-appelant').value,
+nom_appele: document.getElementById('app-appele').value,
+date_appel: document.getElementById('app-date').value,
+heure: document.getElementById('app-heure').value,
+motif: document.getElementById('app-motif').value,
+description: document.getElementById('app-description').value,
+suite_donnee: document.getElementById('app-suite').value,
+contact_id: document.getElementById('app-contact').value
+};
+try {
+if (id) { await api('/api/registre-appels/'+id, {method:'PUT', body}); }
+else { await api('/api/registre-appels', {method:'POST', body}); }
+closeModal(); loadAppels(); showToast('Appel enregistre');
+} catch (e) { showToast(e.message); }
+}
+
+async function showAppelDetail(id) {
+try {
+const appels = await api('/api/registre-appels');
+const a = appels.find(x => x.id === id);
+if (!a) return;
+document.getElementById('modalTitle').textContent = 'Appel ' + (a.date_appel||'');
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Appelant:</strong> ${esc(a.nom_appelant||'-')} ${a.contact_nom ? '('+esc(a.contact_nom)+')' : ''}</div>
+<div style="margin-bottom:.5rem"><strong>Appele:</strong> ${esc(a.nom_appele||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Date/heure:</strong> ${esc(a.date_appel||'-')} ${esc(a.heure||'')}</div>
+<div style="margin-bottom:.5rem"><strong>Motif:</strong> ${esc(a.motif||'-')}</div>
+${a.description ? `<div style="margin-bottom:.5rem"><strong>Description:</strong><br>${esc(a.description)}</div>` : ''}
+${a.suite_donnee ? `<div style="margin-bottom:.5rem"><strong>Suite donnee:</strong><br>${esc(a.suite_donnee)}</div>` : ''}
+<div style="display:flex;gap:.5rem;margin-top:1rem">
+<button class="btn btn-primary btn-sm" onclick="showAppelForm('${a.id}')">Modifier</button>
+<button class="btn btn-danger btn-sm" onclick="deleteAppel('${a.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteAppel(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/registre-appels/'+id, {method:'DELETE'}); closeModal(); loadAppels(); } catch(e){ showToast(e.message); } }
+
+// ===== F9: VOTES / SCRUTINS =====
+async function loadVotes() {
+try {
+const votes = await api('/api/votes');
+if (!votes || votes.length === 0) {
+document.getElementById('votesList').innerHTML = '<div class="empty">Aucun vote</div>';
+return;
+}
+let html = '';
+for (const v of votes) {
+const statutColor = v.statut === 'cloture' ? 'var(--green)' : 'var(--pink)';
+const r = v.resultat || {};
+html += `<div class="contact-card" onclick="showVoteDetail('${v.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(v.titre)}</div>
+<div class="cc-meta">${v.date || '-'} ${v.type_vote ? '('+esc(v.type_vote).toUpperCase()+')' : ''}</div>
+${v.statut === 'cloture' ? `<span style="font-size:.8rem">Pour: ${r.pour||0} | Contre: ${r.contre||0} | Abst: ${r.abstention||0}</span>` : `<span style="background:${statutColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">Ouvert</span>`}
+</div></div></div>`;
+}
+document.getElementById('votesList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showVoteForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier vote' : 'Nouveau vote';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre de la resolution</label><input type="text" id="vote-titre" placeholder="Ex: Approbation du rapport moral"></div>
+<div class="form-group"><label>Date</label><input type="date" id="vote-date"></div>
+<div class="form-group"><label>Type</label>
+<select id="vote-type"><option value="ag">AG</option><option value="ca">CA</option><option value="bureau">Bureau</option></select></div>
+<div class="form-group"><label>Description</label><textarea id="vote-description" rows="3"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveVote('${id||''}')">Enregistrer</button>`;
+openModal();
+}
+
+async function saveVote(id) {
+const body = {
+titre: document.getElementById('vote-titre').value,
+date: document.getElementById('vote-date').value,
+type_vote: document.getElementById('vote-type').value,
+description: document.getElementById('vote-description').value
+};
+try {
+if (id) { await api('/api/votes/'+id, {method:'PUT', body}); }
+else { await api('/api/votes', {method:'POST', body}); }
+closeModal(); loadVotes(); showToast('Vote enregistre');
+} catch (e) { showToast(e.message); }
+}
+
+async function showVoteDetail(id) {
+try {
+const votes = await api('/api/votes');
+const v = votes.find(x => x.id === id);
+if (!v) return;
+const r = v.resultat || {};
+const isOpen = v.statut === 'ouvert';
+document.getElementById('modalTitle').textContent = v.titre;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Date:</strong> ${esc(v.date||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Type:</strong> ${esc(v.type_vote||'-')}</div>
+${v.description ? `<div style="margin-bottom:.5rem"><strong>Description:</strong><br>${esc(v.description)}</div>` : ''}
+${!isOpen ? `<div style="margin:1rem 0;padding:1rem;background:var(--pink-light);border-radius:10px;text-align:center">
+<div style="font-size:1.5rem;font-weight:bold;color:var(--green)">Pour: ${r.pour||0}</div>
+<div style="font-size:1.5rem;font-weight:bold;color:var(--red)">Contre: ${r.contre||0}</div>
+<div style="font-size:1.5rem;font-weight:bold;color:#888">Abstention: ${r.abstention||0}</div>
+${v.notes ? `<div style="margin-top:.5rem;font-size:.85rem">${esc(v.notes)}</div>` : ''}
+</div>` : ''}
+<div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+${isOpen ? `<button class="btn btn-primary btn-sm" onclick="showVoteResultat('${v.id}')">Saisir resultat</button>` : ''}
+<button class="btn btn-primary btn-sm" onclick="showVoteForm('${v.id}')">Modifier</button>
+<button class="btn btn-danger btn-sm" onclick="deleteVote('${v.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+function showVoteResultat(id) {
+document.getElementById('modalTitle').textContent = 'Saisir le resultat';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Pour</label><input type="number" id="vr-pour" value="0" min="0"></div>
+<div class="form-group"><label>Contre</label><input type="number" id="vr-contre" value="0" min="0"></div>
+<div class="form-group"><label>Abstention</label><input type="number" id="vr-abst" value="0" min="0"></div>
+<div class="form-group"><label>Notes</label><textarea id="vr-notes" rows="2" placeholder="Commentaires..."></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveVoteResultat('${id}')">Cloturer le vote</button>`;
+openModal();
+}
+
+async function saveVoteResultat(id) {
+const body = {
+pour: parseInt(document.getElementById('vr-pour').value) || 0,
+contre: parseInt(document.getElementById('vr-contre').value) || 0,
+abstention: parseInt(document.getElementById('vr-abst').value) || 0,
+notes: document.getElementById('vr-notes').value
+};
+try {
+await api('/api/votes/'+id, {method:'PUT', body});
+closeModal(); loadVotes(); showToast('Vote cloture');
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteVote(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/votes/'+id, {method:'DELETE'}); closeModal(); loadVotes(); } catch(e){ showToast(e.message); } }
+
+// ===== F10: CHECKLISTS =====
+async function loadChecklists() {
+try {
+const cls = await api('/api/checklists');
+if (!cls || cls.length === 0) {
+document.getElementById('checklistsList').innerHTML = '<div class="empty">Aucune checklist</div>';
+return;
+}
+let html = '';
+for (const c of cls) {
+const done = (c.coche||[]).filter(x => x).length;
+const total = (c.taches||[]).length;
+const pct = total > 0 ? Math.round(done/total*100) : 0;
+const statutColor = c.statut === 'termine' ? 'var(--green)' : 'var(--pink)';
+html += `<div class="contact-card" onclick="showChecklistDetail('${c.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(c.titre)}</div>
+<div class="cc-meta">${done}/${total} coches ${c.type_checklist ? '('+esc(c.type_checklist)+')' : ''}</div>
+<div style="height:6px;background:#eee;border-radius:3px;margin-top:.3rem"><div style="height:6px;background:${statutColor};border-radius:3px;width:${pct}%"></div></div>
+</div></div></div>`;
+}
+document.getElementById('checklistsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showChecklistForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier checklist' : 'Nouvelle checklist';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="chk-titre" placeholder="Ex: Preparation evenement"></div>
+<div class="form-group"><label>Type</label>
+<select id="chk-type"><option value="evenement">Evenement</option><option value="cloture_exercice">Cloture exercice</option><option value="ag">AG</option><option value="autre">Autre</option></select></div>
+<div class="form-group"><label>Taches (une par ligne)</label><textarea id="chk-taches" rows="6" placeholder="Reserver salle&#10;Preparer affiche&#10;Acheter gouters"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveChecklist('${id||''}')">Enregistrer</button>`;
+openModal();
+}
+
+async function saveChecklist(id) {
+const tachesStr = document.getElementById('chk-taches').value;
+const taches = tachesStr.split('\n').map(t => t.trim()).filter(Boolean);
+const body = {
+titre: document.getElementById('chk-titre').value,
+type_checklist: document.getElementById('chk-type').value,
+taches: taches
+};
+try {
+if (id) { await api('/api/checklists/'+id, {method:'PUT', body}); }
+else { await api('/api/checklists', {method:'POST', body}); }
+closeModal(); loadChecklists(); showToast('Checklist enregistree');
+} catch (e) { showToast(e.message); }
+}
+
+async function showChecklistDetail(id) {
+try {
+const cls = await api('/api/checklists');
+const c = cls.find(x => x.id === id);
+if (!c) return;
+let tasksHtml = '';
+for (let i = 0; i < (c.taches||[]).length; i++) {
+const checked = (c.coche||[])[i];
+tasksHtml += `<label style="display:flex;align-items:center;gap:.5rem;padding:.5rem;border-bottom:1px solid #eee;cursor:pointer">
+<input type="checkbox" ${checked?'checked':''} onchange="toggleChecklistItem('${c.id}',${i},this.checked)">
+<span style="${checked?'text-decoration:line-through;color:#999':''}">${esc(c.taches[i])}</span>
+</label>`;
+}
+document.getElementById('modalTitle').textContent = c.titre;
+document.getElementById('modalBody').innerHTML = `
+${tasksHtml || '<div style="padding:1rem;color:#999">Aucune tache</div>'}
+<div style="display:flex;gap:.5rem;margin-top:1rem">
+<button class="btn btn-primary btn-sm" onclick="showChecklistForm('${c.id}')">Modifier</button>
+<button class="btn btn-danger btn-sm" onclick="deleteChecklist('${c.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch (e) { showToast(e.message); }
+}
+
+async function toggleChecklistItem(chkId, idx, checked) {
+try {
+const cls = await api('/api/checklists');
+const c = cls.find(x => x.id === chkId);
+if (!c) return;
+const coche = [...(c.coche||[])];
+while (coche.length <= idx) coche.push(false);
+coche[idx] = checked;
+await api('/api/checklists/'+chkId, {method:'PUT', body:{coche}});
+showChecklistDetail(chkId);
+loadChecklists();
+} catch (e) { showToast(e.message); }
+}
+
+async function deleteChecklist(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/checklists/'+id, {method:'DELETE'}); closeModal(); loadChecklists(); } catch(e){ showToast(e.message); } }
+
+// ===== F11: SONDAGES =====
+async function loadSondages() {
+try {
+const sondages = await api('/api/sondages');
+if (!sondages || sondages.length === 0) {
+document.getElementById('sondagesList').innerHTML = '<div class="empty">Aucun sondage</div>';
+return;
+}
+let html = '';
+for (const s of sondages) {
+const isOpen = s.statut === 'ouvert';
+const total = s.nb_repondants || 0;
+html += `<div class="contact-card">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(s.question)}</div>
+<div class="cc-meta">${total} repondant(s) ${s.cible ? '('+esc(s.cible)+')' : ''} ${isOpen ? '' : '- cloture'}</div>
+</div></div>`;
+// Options with bars
+if (s.options && s.options.length > 0) {
+for (let i = 0; i < s.options.length; i++) {
+const count = (s.resultats||{})[i] || 0;
+const pct = total > 0 ? Math.round(count/total*100) : 0;
+const myResp = s.reponses && (s.reponses[myContactId] || s.reponses[userName]);
+const myChecked = myResp && (Array.isArray(myResp) ? myResp.includes(i) : myResp === i);
+html += `<div style="padding:.4rem 0;border-bottom:1px solid #eee">
+${isOpen ? `<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="${s.multiple?'checkbox':'radio'}" name="snd_${s.id}" ${myChecked?'checked':''} onchange="repondreSondage('${s.id}',${i})">` : '<div style="display:flex;align-items:center;gap:.5rem">'}
+<span style="flex:1;font-size:.85rem">${esc(s.options[i])}</span>
+<span style="font-size:.8rem;font-weight:bold;color:var(--pink)">${count} (${pct}%)</span>
+${isOpen ? '</label>' : '</div>'}
+<div style="height:4px;background:#eee;border-radius:2px;margin-top:.2rem"><div style="height:4px;background:var(--pink);border-radius:2px;width:${pct}%"></div></div>
+</div>`;
+}
+html += `<div style="display:flex;gap:.5rem;margin-top:.5rem">`;
+if (currentRole !== 'membre' && isOpen) html += `<button class="btn btn-secondary btn-sm" onclick="cloturerSondage('${s.id}')">Cloturer</button>`;
+if (currentRole !== 'membre') html += `<button class="btn btn-danger btn-sm" onclick="deleteSondage('${s.id}')">Supprimer</button>`;
+html += `</div>`;
+}
+html += `</div>`;
+}
+document.getElementById('sondagesList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showSondageForm() {
+document.getElementById('modalTitle').textContent = 'Nouveau sondage';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Question</label><input type="text" id="snd-question" placeholder="Ex: Quelle date pour la prochaine reunion ?"></div>
+<div class="form-group"><label>Options (une par ligne)</label><textarea id="snd-options" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea></div>
+<div class="form-group"><label>Cible</label>
+<select id="snd-cible"><option value="membres">Membres</option><option value="referents">Referents</option><option value="tous">Tous</option></select></div>
+<div class="form-group"><label>Date de fin (optionnel)</label><input type="date" id="snd-fin"></div>
+<div class="form-group"><label><input type="checkbox" id="snd-multiple"> Reponses multiples autorisees</label></div>
+<button class="btn btn-primary btn-full" onclick="saveSondage()">Creer</button>`;
+openModal();
+}
+
+async function saveSondage() {
+const options = document.getElementById('snd-options').value.split('\n').map(t => t.trim()).filter(Boolean);
+const body = {
+question: document.getElementById('snd-question').value,
+options: options,
+cible: document.getElementById('snd-cible').value,
+date_fin: document.getElementById('snd-fin').value,
+multiple: document.getElementById('snd-multiple').checked
+};
+try { await api('/api/sondages', {method:'POST', body}); closeModal(); loadSondages(); showToast('Sondage cree'); } catch(e){ showToast(e.message); }
+}
+
+async function repondreSondage(id, idx) {
+try { await api('/api/sondages/'+id+'/repondre', {method:'POST', body:{option_index:idx}}); loadSondages(); } catch(e){ showToast(e.message); }
+}
+
+async function cloturerSondage(id) { if(!confirm('Cloturer ce sondage ?')) return; try { await api('/api/sondages/'+id+'/cloturer', {method:'PUT'}); loadSondages(); showToast('Sondage cloture'); } catch(e){ showToast(e.message); } }
+async function deleteSondage(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/sondages/'+id, {method:'DELETE'}); loadSondages(); } catch(e){ showToast(e.message); } }
+
+// ===== F12: COMPTES-RENDUS =====
+async function loadCRs() {
+try {
+const crs = await api('/api/comptes-rendus');
+if (!crs || crs.length === 0) {
+document.getElementById('crsList').innerHTML = '<div class="empty">Aucun compte-rendu</div>';
+return;
+}
+let html = '';
+for (const cr of crs) {
+html += `<div class="contact-card" onclick="showCrDetail('${cr.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(cr.titre)}</div>
+<div class="cc-meta">${cr.date || '-'} ${cr.type_reunion ? '('+esc(cr.type_reunion)+')' : ''} ${cr.nb_presents!==undefined ? cr.nb_presents+' present(s)' : ''}</div>
+</div></div></div>`;
+}
+document.getElementById('crsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showCrForm(id) {
+document.getElementById('modalTitle').textContent = id ? 'Modifier compte-rendu' : 'Nouveau compte-rendu';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="cr-titre" placeholder="Ex: Reunion mensuelle juillet"></div>
+<div class="form-group"><label>Date</label><input type="date" id="cr-date"></div>
+<div class="form-group"><label>Type</label>
+<select id="cr-type"><option value="reunion">Reunion</option><option value="ag">AG</option><option value="ca">CA</option><option value="bureau">Bureau</option></select></div>
+<div class="form-group"><label>Presents (Ctrl+clic pour plusieurs)</label><select id="cr-presents" multiple style="height:80px"></select></div>
+<div class="form-group"><label>Ordre du jour</label><textarea id="cr-odj" rows="3"></textarea></div>
+<div class="form-group"><label>Discussions</label><textarea id="cr-discussions" rows="4"></textarea></div>
+<div class="form-group"><label>Decisions</label><textarea id="cr-decisions" rows="3"></textarea></div>
+<div class="form-group"><label>Actions a suivre</label><textarea id="cr-actions" rows="3"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveCr('${id||''}')">Enregistrer</button>`;
+loadContactOptions('cr-presents');
+openModal();
+}
+
+async function saveCr(id) {
+const presents = Array.from(document.getElementById('cr-presents').selectedOptions).map(o => o.value);
+const body = {
+titre: document.getElementById('cr-titre').value,
+date: document.getElementById('cr-date').value,
+type_reunion: document.getElementById('cr-type').value,
+presents: presents,
+ordre_du_jour: document.getElementById('cr-odj').value,
+discussions: document.getElementById('cr-discussions').value,
+decisions: document.getElementById('cr-decisions').value,
+actions: document.getElementById('cr-actions').value
+};
+try {
+if (id) { await api('/api/comptes-rendus/'+id, {method:'PUT', body}); }
+else { await api('/api/comptes-rendus', {method:'POST', body}); }
+closeModal(); loadCRs(); showToast('Compte-rendu enregistre');
+} catch(e){ showToast(e.message); }
+}
+
+async function showCrDetail(id) {
+try {
+const cr = await api('/api/comptes-rendus/'+id);
+document.getElementById('modalTitle').textContent = cr.titre;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Date:</strong> ${esc(cr.date||'-')} | <strong>Type:</strong> ${esc(cr.type_reunion||'-')}</div>
+${cr.presents_noms && cr.presents_noms.length ? `<div style="margin-bottom:.5rem"><strong>Presents:</strong> ${cr.presents_noms.map(esc).join(', ')}</div>` : ''}
+${cr.ordre_du_jour ? `<div style="margin-bottom:.5rem"><strong>Ordre du jour:</strong><br>${esc(cr.ordre_du_jour)}</div>` : ''}
+${cr.discussions ? `<div style="margin-bottom:.5rem"><strong>Discussions:</strong><br>${esc(cr.discussions)}</div>` : ''}
+${cr.decisions ? `<div style="margin-bottom:.5rem"><strong>Decisions:</strong><br>${esc(cr.decisions)}</div>` : ''}
+${cr.actions ? `<div style="margin-bottom:.5rem"><strong>Actions:</strong><br>${esc(cr.actions)}</div>` : ''}
+<div style="display:flex;gap:.5rem;margin-top:1rem">
+<button class="btn btn-primary btn-sm" onclick="showCrForm('${cr.id}')">Modifier</button>
+<button class="btn btn-danger btn-sm" onclick="deleteCr('${cr.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch(e){ showToast(e.message); }
+}
+
+async function deleteCr(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/comptes-rendus/'+id, {method:'DELETE'}); closeModal(); loadCRs(); } catch(e){ showToast(e.message); } }
+
+// ===== F13: SMS / WHATSAPP =====
+async function loadSms() {
+try {
+const camps = await api('/api/sms-campaigns');
+if (!camps || camps.length === 0) {
+document.getElementById('smsList').innerHTML = '<div class="empty">Aucune campagne SMS</div>';
+return;
+}
+let html = '';
+for (const c of camps) {
+const statutColor = c.statut === 'envoyee' ? 'var(--green)' : 'var(--orange)';
+html += `<div class="contact-card" onclick="showSmsDetail('${c.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(c.message.substring(0,50))}${c.message.length>50?'...':''}</div>
+<div class="cc-meta">${c.nb_destinataires} destinataire(s)</div>
+<span style="background:${statutColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">${esc(c.statut)}</span>
+</div></div></div>`;
+}
+document.getElementById('smsList').innerHTML = html;
+} catch (e) { showToast(e.message); }
+}
+
+function showSmsForm() {
+document.getElementById('modalTitle').textContent = 'Nouvelle campagne SMS';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Message (160 car. max)</label><textarea id="sms-msg" rows="3" maxlength="160" placeholder="Rappel: concert le 28 juillet a 21h au Domaine du Plan de la Mer"></textarea></div>
+<div class="form-group"><label>Destinataires par groupe</label>
+<select id="sms-qualite"><option value="">-- Manuel --</option></select></div>
+<div class="form-group"><label>Destinataires manuels (numeros separes par virgule)</label><input type="text" id="sms-numeros" placeholder="0612345678,0687654321"></div>
+<button class="btn btn-primary btn-full" onclick="saveSms()">Preparer la campagne</button>`;
+// Populate qualite dropdown from contacts
+api('/api/contacts').then(contacts => {
+const sel = document.getElementById('sms-qualite');
+const qualites = [...new Set(contacts.map(c => c.qualite).filter(Boolean))].sort();
+for (const q of qualites) sel.appendChild(new Option(q + ' (' + contacts.filter(c => c.qualite === q && c.telephone).length + ' avec tel)', q));
+}).catch(()=>{});
+openModal();
+}
+
+async function saveSms() {
+const body = {
+message: document.getElementById('sms-msg').value,
+destinataires: document.getElementById('sms-numeros').value.split(',').map(t => t.trim()).filter(Boolean),
+qualite: document.getElementById('sms-qualite').value
+};
+try { await api('/api/sms-campaigns', {method:'POST', body}); closeModal(); loadSms(); showToast('Campagne pretee'); } catch(e){ showToast(e.message); }
+}
+
+async function showSmsDetail(id) {
+try {
+const camps = await api('/api/sms-campaigns');
+const c = camps.find(x => x.id === id);
+if (!c) return;
+document.getElementById('modalTitle').textContent = 'Campagne SMS';
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Message:</strong><br>${esc(c.message)}</div>
+<div style="margin-bottom:.5rem"><strong>Destinataires (${c.nb_destinataires}):</strong><br>${esc(c.destinataires.join(', '))}</div>
+<div style="margin-bottom:.5rem"><strong>Statut:</strong> ${esc(c.statut)}</div>
+<div style="display:flex;gap:.5rem;margin-top:1rem">
+${c.statut === 'prete' ? `<button class="btn btn-primary btn-sm" onclick="sendSms('${c.id}')">Envoyer</button>` : ''}
+<button class="btn btn-danger btn-sm" onclick="deleteSms('${c.id}')">Supprimer</button>
+</div>`;
+openModal();
+} catch(e){ showToast(e.message); }
+}
+
+async function sendSms(id) { try { const r = await api('/api/sms-campaigns/'+id+'/send', {method:'POST'}); closeModal(); loadSms(); showToast(r.message || 'Campagne envoyee'); } catch(e){ showToast(e.message); } }
+async function deleteSms(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/sms-campaigns/'+id, {method:'DELETE'}); closeModal(); loadSms(); } catch(e){ showToast(e.message); } }
+
+// ===== F14: PRESSE =====
+let currentPresseTab = 'contacts';
+function showPresseTab(tab) {
+currentPresseTab = tab;
+document.getElementById('presseContactsList').style.display = tab === 'contacts' ? '' : 'none';
+document.getElementById('presseReleasesList').style.display = tab === 'releases' ? '' : 'none';
+document.getElementById('presseCouverturesList').style.display = tab === 'couvertures' ? '' : 'none';
+}
+
+async function loadPresse() {
+showPresseTab(currentPresseTab);
+try {
+const [contacts, releases, couvertures] = await Promise.all([
+api('/api/presse/contacts'), api('/api/presse/releases'), api('/api/presse/couvertures')
+]);
+// Contacts
+let hc = '';
+if (!contacts || contacts.length === 0) hc = '<div class="empty">Aucun contact presse</div>';
+else for (const c of contacts) {
+hc += `<div class="contact-card" onclick="showPresseContactDetail('${c.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(c.nom)}</div>
+<div class="cc-meta">${esc(c.media||'-')} ${c.fonction ? '('+esc(c.fonction)+')' : ''} ${c.email ? ' &middot; '+esc(c.email) : ''}</div>
+</div></div></div>`;
+}
+document.getElementById('presseContactsList').innerHTML = hc;
+// Releases
+let hr = '';
+if (!releases || releases.length === 0) hr = '<div class="empty">Aucun communique</div>';
+else for (const r of releases) {
+const sc = r.statut === 'publie' ? 'var(--green)' : (r.statut === 'envoye' ? 'var(--blue)' : 'var(--orange)');
+hr += `<div class="contact-card" onclick="showReleaseDetail('${r.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(r.sujet)}</div>
+<div class="cc-meta">${r.date || '-'} ${r.media_cible ? '&rarr; '+esc(r.media_cible) : ''}</div>
+<span style="background:${sc};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">${esc(r.statut)}</span>
+</div></div></div>`;
+}
+document.getElementById('presseReleasesList').innerHTML = hr;
+// Couvertures
+let hcv = '';
+if (!couvertures || couvertures.length === 0) hcv = '<div class="empty">Aucune couverture</div>';
+else for (const c of couvertures) {
+hcv += `<div class="contact-card" onclick="showCouvertureDetail('${c.id}')">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(c.titre)}</div>
+<div class="cc-meta">${esc(c.media||'-')} ${c.date || ''} ${c.type_couverture ? '('+esc(c.type_couverture)+')' : ''}</div>
+${c.lien ? `<a href="${esc(c.lien)}" target="_blank" style="color:var(--pink);font-size:.8rem">Voir le lien</a>` : ''}
+</div></div></div>`;
+}
+document.getElementById('presseCouverturesList').innerHTML = hcv;
+} catch (e) { showToast(e.message); }
+}
+
+function showPresseFormByTab() {
+if (currentPresseTab === 'contacts') showPresseContactForm();
+else if (currentPresseTab === 'releases') showReleaseForm();
+else showCouvertureForm();
+}
+
+function showPresseContactForm() {
+document.getElementById('modalTitle').textContent = 'Nouveau contact presse';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Nom</label><input type="text" id="pc-nom"></div>
+<div class="form-group"><label>Media</label><input type="text" id="pc-media" placeholder="Ex: Var Matin, France 3 PACA"></div>
+<div class="form-group"><label>Fonction</label><input type="text" id="pc-fonction" placeholder="Journaliste, redacteur..."></div>
+<div class="form-group"><label>Email</label><input type="email" id="pc-email"></div>
+<div class="form-group"><label>Telephone</label><input type="tel" id="pc-tel"></div>
+<div class="form-group"><label>Notes</label><textarea id="pc-notes" rows="2"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="savePresseContact()">Enregistrer</button>`;
+openModal();
+}
+async function savePresseContact() {
+const body = {nom:document.getElementById('pc-nom').value, media:document.getElementById('pc-media').value, fonction:document.getElementById('pc-fonction').value, email:document.getElementById('pc-email').value, telephone:document.getElementById('pc-tel').value, notes:document.getElementById('pc-notes').value};
+try { await api('/api/presse/contacts', {method:'POST', body}); closeModal(); loadPresse(); showToast('Contact presse ajoute'); } catch(e){ showToast(e.message); }
+}
+async function showPresseContactDetail(id) {
+try {
+const contacts = await api('/api/presse/contacts');
+const c = contacts.find(x => x.id === id);
+if (!c) return;
+document.getElementById('modalTitle').textContent = c.nom;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Media:</strong> ${esc(c.media||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Fonction:</strong> ${esc(c.fonction||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Email:</strong> ${esc(c.email||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Tel:</strong> ${esc(c.telephone||'-')}</div>
+${c.notes ? `<div style="margin-bottom:.5rem"><strong>Notes:</strong><br>${esc(c.notes)}</div>` : ''}
+<button class="btn btn-danger btn-sm" onclick="deletePresseContact('${c.id}')">Supprimer</button>`;
+openModal();
+} catch(e){ showToast(e.message); }
+}
+async function deletePresseContact(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/presse/contacts/'+id, {method:'DELETE'}); closeModal(); loadPresse(); } catch(e){ showToast(e.message); } }
+
+function showReleaseForm() {
+document.getElementById('modalTitle').textContent = 'Nouveau communique';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Sujet</label><input type="text" id="rl-sujet"></div>
+<div class="form-group"><label>Date</label><input type="date" id="rl-date"></div>
+<div class="form-group"><label>Media cible</label><input type="text" id="rl-media" placeholder="tous ou nom du media"></div>
+<div class="form-group"><label>Contenu</label><textarea id="rl-contenu" rows="6"></textarea></div>
+<div class="form-group"><label>Statut</label>
+<select id="rl-statut"><option value="brouillon">Brouillon</option><option value="envoye">Envoye</option><option value="publie">Publie</option></select></div>
+<button class="btn btn-primary btn-full" onclick="saveRelease()">Enregistrer</button>`;
+openModal();
+}
+async function saveRelease() {
+const body = {sujet:document.getElementById('rl-sujet').value, date:document.getElementById('rl-date').value, media_cible:document.getElementById('rl-media').value, contenu:document.getElementById('rl-contenu').value, statut:document.getElementById('rl-statut').value};
+try { await api('/api/presse/releases', {method:'POST', body}); closeModal(); loadPresse(); showToast('Communique enregistre'); } catch(e){ showToast(e.message); }
+}
+async function showReleaseDetail(id) {
+try {
+const releases = await api('/api/presse/releases');
+const r = releases.find(x => x.id === id);
+if (!r) return;
+document.getElementById('modalTitle').textContent = r.sujet;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Date:</strong> ${esc(r.date||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Media cible:</strong> ${esc(r.media_cible||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Statut:</strong> ${esc(r.statut)}</div>
+${r.contenu ? `<div style="margin-bottom:.5rem"><strong>Contenu:</strong><br>${esc(r.contenu)}</div>` : ''}
+<button class="btn btn-danger btn-sm" onclick="deleteRelease('${r.id}')">Supprimer</button>`;
+openModal();
+} catch(e){ showToast(e.message); }
+}
+async function deleteRelease(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/presse/releases/'+id, {method:'DELETE'}); closeModal(); loadPresse(); } catch(e){ showToast(e.message); } }
+
+function showCouvertureForm() {
+document.getElementById('modalTitle').textContent = 'Nouvelle couverture';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Titre</label><input type="text" id="cv-titre"></div>
+<div class="form-group"><label>Media</label><input type="text" id="cv-media"></div>
+<div class="form-group"><label>Date</label><input type="date" id="cv-date"></div>
+<div class="form-group"><label>Type</label>
+<select id="cv-type"><option value="article">Article</option><option value="emission">Emission</option><option value="interview">Interview</option><option value="mention">Mention</option></select></div>
+<div class="form-group"><label>Lien (URL)</label><input type="url" id="cv-lien" placeholder="https://..."></div>
+<div class="form-group"><label>Resume</label><textarea id="cv-resume" rows="3"></textarea></div>
+<button class="btn btn-primary btn-full" onclick="saveCouverture()">Enregistrer</button>`;
+openModal();
+}
+async function saveCouverture() {
+const body = {titre:document.getElementById('cv-titre').value, media:document.getElementById('cv-media').value, date:document.getElementById('cv-date').value, type_couverture:document.getElementById('cv-type').value, lien:document.getElementById('cv-lien').value, resume:document.getElementById('cv-resume').value};
+try { await api('/api/presse/couvertures', {method:'POST', body}); closeModal(); loadPresse(); showToast('Couverture ajoutee'); } catch(e){ showToast(e.message); }
+}
+async function showCouvertureDetail(id) {
+try {
+const couvertures = await api('/api/presse/couvertures');
+const c = couvertures.find(x => x.id === id);
+if (!c) return;
+document.getElementById('modalTitle').textContent = c.titre;
+document.getElementById('modalBody').innerHTML = `
+<div style="margin-bottom:.5rem"><strong>Media:</strong> ${esc(c.media||'-')} | <strong>Type:</strong> ${esc(c.type_couverture||'-')}</div>
+<div style="margin-bottom:.5rem"><strong>Date:</strong> ${esc(c.date||'-')}</div>
+${c.lien ? `<div style="margin-bottom:.5rem"><a href="${esc(c.lien)}" target="_blank">Voir l article</a></div>` : ''}
+${c.resume ? `<div style="margin-bottom:.5rem"><strong>Resume:</strong><br>${esc(c.resume)}</div>` : ''}
+<button class="btn btn-danger btn-sm" onclick="deleteCouverture('${c.id}')">Supprimer</button>`;
+openModal();
+} catch(e){ showToast(e.message); }
+}
+async function deleteCouverture(id) { if(!confirm('Supprimer ?')) return; try { await api('/api/presse/couvertures/'+id, {method:'DELETE'}); closeModal(); loadPresse(); } catch(e){ showToast(e.message); } }
+
+// ===== F15: MON ESPACE =====
+async function loadMonEspace() {
+try {
+const d = await api('/api/mon-profil');
+const c = d.contact || {};
+let html = '<h2 style="margin-bottom:1rem">Mon espace</h2>';
+// Profile
+html += `<div class="contact-card" style="margin-bottom:1rem">
+<div class="cc-top"><div class="cc-info">
+<div class="cc-name">${esc(c.prenom||'')} ${esc(c.nom||'')}</div>
+<div class="cc-meta">${esc(c.qualite||'-')}</div>
+</div></div>
+<div style="padding:.5rem 0;font-size:.85rem">
+<div style="margin-bottom:.3rem"><strong>Email:</strong> ${esc(c.email||'-')}</div>
+<div style="margin-bottom:.3rem"><strong>Telephone:</strong> ${esc(c.telephone||'-')}</div>
+<div style="margin-bottom:.3rem"><strong>Ville:</strong> ${esc(c.ville||'-')} ${esc(c.code_postal||'')}</div>
+</div>
+<button class="btn btn-primary btn-sm" onclick="editMonProfil()">Modifier mes infos</button>
+</div>`;
+// Cotisations
+if (d.cotisations && d.cotisations.length > 0) {
+html += '<h3>Mes cotisations</h3>';
+for (const ct of d.cotisations) {
+const sc = ct.statut === 'paye' ? 'var(--green)' : 'var(--orange)';
+html += `<div style="padding:.4rem 0;border-bottom:1px solid #eee"><strong>${esc(ct.annee||'-')}</strong> ${ct.montant} eur <span style="background:${sc};color:#fff;padding:1px 6px;border-radius:8px;font-size:.7rem">${esc(ct.statut||'-')}</span></div>`;
+}
+}
+// Evenements
+if (d.events_inscrits && d.events_inscrits.length > 0) {
+html += '<h3 style="margin-top:1rem">Mes evenements</h3>';
+for (const e of d.events_inscrits) {
+const pc = e.presence === 'present' ? 'var(--green)' : (e.presence === 'excuse' ? 'var(--orange)' : '#999');
+html += `<div style="padding:.4rem 0;border-bottom:1px solid #eee"><strong>${esc(e.date||'-')}</strong> ${esc(e.titre||'')} <span style="background:${pc};color:#fff;padding:1px 6px;border-radius:8px;font-size:.7rem">${esc(e.presence)}</span></div>`;
+}
+}
+document.getElementById('monEspaceContent').innerHTML = html;
+} catch (e) {
+document.getElementById('monEspaceContent').innerHTML = '<div class="empty">Aucun profil associe a votre compte. Contactez un administrateur.</div>';
+}
+}
+
+function editMonProfil() {
+api('/api/mon-profil').then(d => {
+const c = d.contact || {};
+document.getElementById('modalTitle').textContent = 'Modifier mes informations';
+document.getElementById('modalBody').innerHTML = `
+<div class="form-group"><label>Email</label><input type="email" id="mp-email" value="${esc(c.email||'')}"></div>
+<div class="form-group"><label>Telephone</label><input type="tel" id="mp-tel" value="${esc(c.telephone||'')}"></div>
+<div class="form-group"><label>Ville</label><input type="text" id="mp-ville" value="${esc(c.ville||'')}"></div>
+<div class="form-group"><label>Code postal</label><input type="text" id="mp-cp" value="${esc(c.code_postal||'')}"></div>
+<button class="btn btn-primary btn-full" onclick="saveMonProfil()">Enregistrer</button>`;
+openModal();
+}).catch(e => showToast(e.message));
+}
+
+async function saveMonProfil() {
+const body = {
+email: document.getElementById('mp-email').value,
+telephone: document.getElementById('mp-tel').value,
+ville: document.getElementById('mp-ville').value,
+code_postal: document.getElementById('mp-cp').value
+};
+try { await api('/api/mon-profil', {method:'PUT', body}); closeModal(); loadMonEspace(); showToast('Profil mis a jour'); } catch(e){ showToast(e.message); }
+}
+
+// ===== TOAST =====
+let toastTimer;
+function showToast(msg) {
+const t = document.getElementById('toast');
+t.textContent = msg;
+t.classList.add('show');
+clearTimeout(toastTimer);
+toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ===== INIT =====
+if (token) {
+// Verify token
+fetch('/auth/verify?token=' + token)
+.then(r => { if (r.ok) return r.json(); throw new Error('invalid'); })
+.then(data => {
+currentUser = data.username;
+currentRole = data.role;
+localStorage.setItem('romy_user', currentUser);
+localStorage.setItem('romy_role', currentRole);
+showApp();
+})
+.catch(() => {
+token = '';
+localStorage.removeItem('romy_token');
+});
+}
+</script>
+</body>
+</html>

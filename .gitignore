@@ -1,0 +1,15 @@
+# Secrets - NE JAMAIS pousser
+auth_config.json
+smtp_config.json
+db.json
+backups/
+uploads/
+email_attachments/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+Thumbs.db
+.DS_Store
