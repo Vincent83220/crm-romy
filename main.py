@@ -7,11 +7,14 @@ Déploiement: Raspberry Pi (Tailscale) + Windows local
 import json
 import os
 import re
+import base64
 import smtplib
 import time
 import threading
 import hashlib
 import secrets
+import urllib.request
+import urllib.error
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -33,10 +36,21 @@ BACKUP_DIR = BASE_DIR / "backups"
 AUTH_PATH = BASE_DIR / "auth_config.json"
 SMTP_PATH = BASE_DIR / "smtp_config.json"
 DOCS_DIR = BASE_DIR / "uploads"
+STORAGE_DIR = BASE_DIR / "nipogi_storage"
+STORAGE_UPLOADS = STORAGE_DIR / "uploads"
+STORAGE_DOCUMENTS = STORAGE_DIR / "documents"
+STORAGE_BACKUPS = STORAGE_DIR / "backups"
+STORAGE_ARCHIVES = STORAGE_DIR / "archives"
 BACKUP_DIR.mkdir(exist_ok=True)
 DOCS_DIR.mkdir(exist_ok=True)
+# Nipogi storage via SSHFS mount — create subdirs if mount is present
+for _d in (STORAGE_DIR, STORAGE_UPLOADS, STORAGE_DOCUMENTS, STORAGE_BACKUPS, STORAGE_ARCHIVES):
+    try:
+        _d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass  # mount not available — endpoints will report gracefully
 
-VERSION = "1.28"
+VERSION = "1.34"
 HOST = os.environ.get("CRM_HOST", "100.89.45.97")
 PORT = int(os.environ.get("CRM_PORT", "8001"))
 
@@ -163,7 +177,16 @@ def save_db(data):
         tmp = DB_PATH.with_suffix(".tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, DB_PATH)
+        try:
+            os.replace(tmp, DB_PATH)
+        except OSError:
+            # Fallback for bind-mounted files (os.replace fails with "Device or resource busy")
+            with open(DB_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 def backup_db():
     with _db_lock:
@@ -231,6 +254,7 @@ class EvenementCreate(BaseModel):
     lieu: str = ""
     description: str = ""
     participants: list[str] = []
+    type: str = ""  # "", "intervention" (sensibilisation), etc.
 
 class EvenementUpdate(BaseModel):
     titre: Optional[str] = None
@@ -240,6 +264,7 @@ class EvenementUpdate(BaseModel):
     description: Optional[str] = None
     participants: Optional[list[str]] = None
     presence: Optional[dict] = None  # {contact_id: "present"|"absent"|"excuse"|""}
+    type: Optional[str] = None
 
 class CotisationCreate(BaseModel):
     contact_id: str
@@ -304,6 +329,10 @@ class UserCreate(BaseModel):
     password: str
     role: str = "editeur"
     contact_id: str = ""  # for membre role: link to their contact record
+
+class ChangePassword(BaseModel):
+    current_password: str
+    new_password: str
 
 class UserUpdate(BaseModel):
     password: Optional[str] = None
@@ -483,6 +512,33 @@ class MembreProfilUpdate(BaseModel):
     ville: Optional[str] = None
     code_postal: Optional[str] = None
 
+# ============ MODELS V1.34 — subventions ============
+class SubventionCreate(BaseModel):
+    organisme: str  # organisme financeur (ex: Conseil departemental, Fonds de dotation)
+    intitule: str  # nom de l'appel a projets / dispositif
+    montant_demande: float = 0.0
+    montant_accorde: float = 0.0
+    date_demande: str = ""  # YYYY-MM-DD
+    date_reponse: str = ""  # YYYY-MM-DD
+    statut: str = "brouillon"  # brouillon, depose, accepte, refuse
+    echeance: str = ""  # YYYY-MM-DD date limite de depot
+    documents_requis: str = ""  # documents a fournir (texte libre)
+    documents_remis: str = ""  # documents effectivement remis (texte libre)
+    notes: str = ""
+
+class SubventionUpdate(BaseModel):
+    organisme: Optional[str] = None
+    intitule: Optional[str] = None
+    montant_demande: Optional[float] = None
+    montant_accorde: Optional[float] = None
+    date_demande: Optional[str] = None
+    date_reponse: Optional[str] = None
+    statut: Optional[str] = None
+    echeance: Optional[str] = None
+    documents_requis: Optional[str] = None
+    documents_remis: Optional[str] = None
+    notes: Optional[str] = None
+
 # ============ APP ============
 app = FastAPI(title="CRM Les Ami(e)s de Romy")
 
@@ -655,6 +711,33 @@ async def update_user(username: str, req: UserUpdate, user=Depends(require_admin
             with open(AUTH_PATH, "w", encoding="utf-8") as f:
                 json.dump(auth, f, ensure_ascii=False, indent=2)
             return {"status": "ok"}
+    raise HTTPException(status_code=404, detail="Utilisateur non trouve")
+
+@app.post("/auth/change-password")
+async def change_password(req: ChangePassword, user=Depends(require_auth)):
+    """Permet a tout utilisateur connecte de changer son propre mot de passe."""
+    auth = load_auth()
+    for u in auth["users"]:
+        if u["username"] == user["username"]:
+            # Verifier l'ancien mot de passe
+            stored_hash = u.get("password_hash")
+            stored_salt = u.get("password_salt")
+            if stored_hash and stored_salt:
+                if not verify_password(req.current_password, stored_hash, stored_salt):
+                    raise HTTPException(status_code=403, detail="Mot de passe actuel incorrect")
+            elif u.get("password") != req.current_password:
+                raise HTTPException(status_code=403, detail="Mot de passe actuel incorrect")
+            # Valider le nouveau mot de passe
+            if len(req.new_password) < 4:
+                raise HTTPException(status_code=400, detail="Le nouveau mot de passe doit faire au moins 4 caracteres")
+            # Hasher et sauvegarder
+            h, s = hash_password(req.new_password)
+            u["password_hash"] = h
+            u["password_salt"] = s
+            u.pop("password", None)
+            with open(AUTH_PATH, "w", encoding="utf-8") as f:
+                json.dump(auth, f, ensure_ascii=False, indent=2)
+            return {"status": "ok", "message": "Mot de passe modifie avec succes"}
     raise HTTPException(status_code=404, detail="Utilisateur non trouve")
 
 @app.delete("/auth/users/{username}")
@@ -895,6 +978,7 @@ async def create_evenement(req: EvenementCreate, user=Depends(require_referent))
         "lieu": req.lieu,
         "description": req.description,
         "participants": req.participants,
+        "type": req.type,
         "presence": {},
         "rappel_envoye": False,
         "cree_par": user["username"],
@@ -947,6 +1031,9 @@ async def update_evenement(evt_id: str, req: EvenementUpdate, user=Depends(requi
             if req.presence is not None:
                 ev["presence"] = req.presence
                 changes.append("presence mise a jour")
+            if req.type is not None and ev.get("type", "") != req.type:
+                changes.append(f"type: '{ev.get('type', '')}' -> '{req.type}'")
+                ev["type"] = req.type
             if changes:
                 ev.setdefault("historique", []).append({"date": now_iso(), "user": user["username"], "action": "modification", "details": " | ".join(changes)})
             save_db(data)
@@ -961,6 +1048,94 @@ async def delete_evenement(evt_id: str, user=Depends(require_referent)):
     save_db(data)
     backup_db()
     return {"status": "ok"}
+
+# ============ INTERVENTIONS (sensibilisation par etablissement) ============
+@app.get("/api/interventions/synthese")
+async def interventions_synthese(user=Depends(require_auth)):
+    """Synthese des evenements de type 'intervention' groupes par etablissement (lieu).
+    Retourne: liste triee par nb interventions desc, avec pour chaque etablissement:
+    - nom, nb_interventions, dates[], nb_total_participants, derniere_date, frequence
+    """
+    data = load_db()
+    evenements = data.get("evenements", [])
+
+    # Filtrer les evenements de type intervention
+    interventions = [ev for ev in evenements if ev.get("type", "") == "intervention"]
+
+    # Grouper par etablissement (lieu)
+    par_lieu = {}
+    for ev in interventions:
+        lieu = ev.get("lieu", "").strip() or "(Non precise)"
+        if lieu not in par_lieu:
+            par_lieu[lieu] = {
+                "etablissement": lieu,
+                "nb_interventions": 0,
+                "dates": [],
+                "nb_total_participants": 0,
+            }
+        grp = par_lieu[lieu]
+        grp["nb_interventions"] += 1
+        ev_date = ev.get("date", "")
+        if ev_date:
+            grp["dates"].append(ev_date)
+        nb_part = len(ev.get("participants", []))
+        grp["nb_total_participants"] += nb_part
+
+    # Construire la liste de synthese
+    synthese = []
+    for lieu, grp in par_lieu.items():
+        dates_triees = sorted(grp["dates"], reverse=True)
+        derniere_date = dates_triees[0] if dates_triees else ""
+        # Frequence: intervalle moyen en jours entre interventions
+        frequence = ""
+        if len(dates_triees) >= 2:
+            from datetime import datetime as _dt
+            dates_asc = sorted(grp["dates"])
+            intervals = []
+            for i in range(1, len(dates_asc)):
+                try:
+                    d1 = _dt.strptime(dates_asc[i - 1], "%Y-%m-%d")
+                    d2 = _dt.strptime(dates_asc[i], "%Y-%m-%d")
+                    intervals.append((d2 - d1).days)
+                except Exception:
+                    pass
+            if intervals:
+                avg_days = sum(intervals) / len(intervals)
+                if avg_days < 7:
+                    frequence = f"Tous les {round(avg_days)} j"
+                elif avg_days < 30:
+                    frequence = f"Toutes les {round(avg_days / 7)} sem"
+                elif avg_days < 365:
+                    frequence = f"Tous les {round(avg_days / 30)} mois"
+                else:
+                    frequence = f"Tous les {round(avg_days / 365)} an(s)"
+            else:
+                frequence = "Ponctuel"
+        else:
+            frequence = "Ponctuel"
+
+        synthese.append({
+            "etablissement": grp["etablissement"],
+            "nb_interventions": grp["nb_interventions"],
+            "dates": dates_triees,
+            "nb_total_participants": grp["nb_total_participants"],
+            "derniere_date": derniere_date,
+            "frequence": frequence,
+        })
+
+    # Trier par nb interventions desc
+    synthese.sort(key=lambda x: x["nb_interventions"], reverse=True)
+
+    total_interventions = sum(s["nb_interventions"] for s in synthese)
+    total_participants = sum(s["nb_total_participants"] for s in synthese)
+    nb_etablissements = len(synthese)
+
+    return {
+        "total_interventions": total_interventions,
+        "total_participants": total_participants,
+        "nb_etablissements": nb_etablissements,
+        "synthese": synthese,
+    }
 
 # ============ PRESENCE (membre self-registration) ============
 @app.post("/api/evenements/{evt_id}/presence")
@@ -1175,9 +1350,17 @@ async def download_document(doc_id: str, user=Depends(require_referent)):
     data = load_db()
     for d in data.get("documents", []):
         if d["id"] == doc_id:
-            if not os.path.exists(d["filepath"]):
+            # Chercher le fichier dans uploads/ (ancien) ou nipogi_storage/documents/ (nouveau)
+            filepath = d.get("filepath", "")
+            if not filepath and d.get("fichier"):
+                # Nouveau format: fichier = "asso/nom.pdf" dans nipogi_storage/documents/
+                filepath = str(STORAGE_DIR / "documents" / d["fichier"])
+                if not os.path.exists(filepath):
+                    # Fallback: uploads/
+                    filepath = str(DOCS_DIR / d["fichier"])
+            if not os.path.exists(filepath):
                 raise HTTPException(status_code=404, detail="Fichier introuvable")
-            return FileResponse(d["filepath"], filename=d["filename"])
+            return FileResponse(filepath, filename=d.get("filename", d.get("nom", "document")))
     raise HTTPException(status_code=404, detail="Document non trouve")
 
 @app.delete("/api/documents/{doc_id}")
@@ -1185,8 +1368,14 @@ async def delete_document(doc_id: str, user=Depends(require_referent)):
     data = load_db()
     for d in data.get("documents", []):
         if d["id"] == doc_id:
-            if os.path.exists(d["filepath"]):
-                os.unlink(d["filepath"])
+            # Supprimer le fichier (ancien ou nouveau format)
+            filepath = d.get("filepath", "")
+            if not filepath and d.get("fichier"):
+                filepath = str(STORAGE_DIR / "documents" / d["fichier"])
+                if not os.path.exists(filepath):
+                    filepath = str(DOCS_DIR / d["fichier"])
+            if os.path.exists(filepath):
+                os.unlink(filepath)
             data["documents"] = [x for x in data["documents"] if x["id"] != doc_id]
             save_db(data)
             return {"status": "ok"}
@@ -1243,6 +1432,36 @@ async def get_templates(user=Depends(require_referent)):
             "subject": "Newsletter - Les Ami(e)s de Romy",
             "body": "<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f3e0f5;padding:20px;border-radius:12px\"><div style=\"text-align:center;padding:20px 0\"><span style=\"font-size:2rem\">&hearts;</span><h1 style=\"color:#d03ec6;margin:0\">Les Ami(e)s de Romy</h1></div><div style=\"background:#fff;padding:20px;border-radius:8px\"><p>Bonjour,</p><p>Voici les dernieres nouvelles de l association.</p><p>[Contenu a personnaliser]</p><p style=\"color:#999;font-size:.85rem\">L equipe des Ami(e)s de Romy</p></div></div>",
             "html": True
+        },
+        "remerciement_don": {
+            "subject": "Merci pour votre don - Les Ami(e)s de Romy",
+            "body": "Bonjour [PRENOM] [NOM],\n\nNous tenons a vous remercier chaleureusement pour votre don de [MONTANT] euros en faveur de notre association Les Ami(e)s de Romy.\n\nGrace a votre generosite, nous pouvons poursuivre nos actions et accompagner nos projets tout au long de l annee [ANNEE]. Votre soutien est essentiel pour nous.\n\nUn recu fiscal vous sera adresse prochainement si votre don ouvre droit a une deduction fiscale.\n\nEncore merci pour votre confiance et votre fidelite.\n\nCordialement,\nL equipe des Ami(e)s de Romy",
+            "html": False
+        },
+        "convocation_ag": {
+            "subject": "Convocation a l'Assemblee Generale - Les Ami(e)s de Romy",
+            "body": "Bonjour [PRENOM] [NOM],\n\nL equipe de l association Les Ami(e)s de Romy a le plaisir de vous convoquer a l Assemblee Generale de l annee [ANNEE].\n\nDate: [A completer]\nLieu: [A completer]\nOrdre du jour:\n  - Rapport moral du President\n  - Rapport financier du Tresorier\n  - Renouvellement du Conseil d Administration\n  - Questions diverses\n\nVotre presence est importante pour la vie de notre association. En cas d empechement, vous pouvez vous faire representer par le biais d un pouvoir.\n\nMerci de confirmer votre presence aupres du secretaire.\n\nCordialement,\nLe Conseil d Administration des Ami(e)s de Romy",
+            "html": False
+        },
+        "bilan_annuel": {
+            "subject": "Bilan annuel [ANNEE] - Les Ami(e)s de Romy",
+            "body": "Bonjour [PRENOM] [NOM],\n\nNous avons le plaisir de vous presenter le bilan annuel de l association Les Ami(e)s de Romy pour l annee [ANNEE].\n\nCette annee a ete riche en evenements et en actions:\n  - Nombre d adherents: [A completer]\n  - Evenements organises: [A completer]\n  - Montant des dons recoltes: [MONTANT] euros\n  - Actions mennees: [A completer]\n\nNous tenons a remercier l ensemble de nos benevoles, nos donateurs et nos adherents pour leur soutien precieux.\n\nVous trouverez en piece jointe le rapport complet de nos activites.\n\nCordialement,\nL equipe des Ami(e)s de Romy",
+            "html": False
+        },
+        "relance_cotisation": {
+            "subject": "Relance de cotisation [ANNEE] - Les Ami(e)s de Romy",
+            "body": "Bonjour [PRENOM] [NOM],\n\nNous vous contactons concernant votre cotisation annuelle a l association Les Ami(e)s de Romy pour l annee [ANNEE].\n\nA ce jour, nous n avons pas recu le reglement de votre cotisation d un montant de [MONTANT] euros. Nous vous invitons a regulariser votre situation dans les meilleurs delais.\n\nPour cela, vous pouvez effectuer votre paiement:\n  - Par cheque a l ordre de Les Ami(e)s de Romy\n  - Par virement bancaire (contactez-nous pour le RIB)\n  - En especes lors d un deplacement a l association\n\nVotre cotisation est essentielle au bon fonctionnement de nos actions et nous comptons sur votre soutien.\n\nSi vous avez deja regle votre cotisation, merci d ignorer ce message et d en excuser la relance.\n\nCordialement,\nLe Tresorier des Ami(e)s de Romy",
+            "html": False
+        },
+        "anniversaire_adhesion": {
+            "subject": "Felicitations pour votre anniversaire d'adhesion - Les Ami(e)s de Romy",
+            "body": "Bonjour [PRENOM] [NOM],\n\nL equipe des Ami(e)s de Romy est heureuse de vous feliciter a l occasion de l anniversaire de votre adhesion a notre association.\n\nDepuis votre adhesion, vous contribuez a la dynamique et au rayonnement de notre association grace a votre engagement et votre fidelite.\n\nNous esperons continuer a vous compter parmi nos adherents pour les annees a venir et a partager ensemble de nouveaux projets enrichissants.\n\nToute l equipe vous souhaite une excellente continuation et vous remercie pour votre soutien continu.\n\nCordialement,\nL equipe des Ami(e)s de Romy",
+            "html": False
+        },
+        "merci_benevole": {
+            "subject": "Remerciement pour votre benevolat - Les Ami(e)s de Romy",
+            "body": "Bonjour [PRENOM] [NOM],\n\nL equipe des Ami(e)s de Romy tient a vous adreser ses plus vifs remerciements pour votre engagement benevole au sein de notre association.\n\nVotre devouement et votre disponibilite tout au long de l annee [ANNEE] ont largement contribue au succes de nos actions et evenements. Grace a vous, nous avons pu atteindre nos objectifs et offrir un accompagnement de qualite.\n\nNous tenons a souligner votre implication notamment sur les projets suivants:\n  - [A completer]\n  - [A completer]\n\nNous esperons pouvoir compter de nouveau sur votre soutien pour les prochaines actions. N hesitez pas a nous faire part de vos suggestions ou envies pour les projets a venir.\n\nEncore merci pour tout ce que vous faites.\n\nCordialement,\nL equipe des Ami(e)s de Romy",
+            "html": False
         }
     }
 
@@ -1685,6 +1904,412 @@ async def delete_feedback(fb_id: str, user=Depends(require_referent)):
     backup_db()
     return {"status": "ok"}
 
+# ============ CARTE DE VISITE PUBLIQUE ============
+@app.get("/api/public/carte", response_class=HTMLResponse)
+async def carte_visite_publique():
+    """Page de carte de visite publique de l'association — aucune auth requise."""
+    data = load_db()
+    evenements = data.get("evenements", [])
+    # Trouver le prochain événement (date >= aujourd'hui)
+    prochain_evt = None
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    for ev in evenements:
+        ev_date = ev.get("date", "")
+        if ev_date and ev_date >= today_str:
+            if prochain_evt is None or ev_date < prochain_evt.get("date", "9999"):
+                prochain_evt = ev
+    # Infos association (depuis db.json si disponible, sinon valeurs par défaut)
+    asso_info = data.get("association", {})
+    nom_asso = "Les Ami(e)s de Romy"
+    slogan = asso_info.get("slogan", "Sensibiliser, protéger et accompagner")
+    mission = asso_info.get("mission", "Notre association accompagne les familles touchées par la maladie de Huntington en proposant soutien, activités et répit. Nous sensibilisons le grand public et defendons les droits des malades et de leurs proches.")
+    email = asso_info.get("email", "contact@amisderomy.fr")
+    tel = asso_info.get("tel", "06 00 00 00 00")
+    adresse = asso_info.get("adresse", "France")
+
+    helloasso_url = "https://www.helloasso.com/associations/les-ami-es-de-romy"
+
+    # Section prochain événement
+    if prochain_evt:
+        evt_html = f"""
+        <div class="carte-evt">
+          <div class="evt-badge">Prochain événement</div>
+          <div class="evt-titre">{prochain_evt.get('titre', '')}</div>
+          <div class="evt-date">📅 {prochain_evt.get('date', '')}{(' à ' + prochain_evt.get('heure', '')) if prochain_evt.get('heure') else ''}</div>
+          {f'<div class="evt-lieu">📍 {prochain_evt.get("lieu", "")}</div>' if prochain_evt.get('lieu') else ''}
+          {f'<div class="evt-desc">{prochain_evt.get("description", "")}</div>' if prochain_evt.get('description') else ''}
+        </div>
+        """
+    else:
+        evt_html = '<div class="carte-evt"><div class="evt-badge">Prochain événement</div><div class="evt-none">Aucun événement planifié pour le moment — revenez bientôt !</div></div>'
+
+    html_page = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Les Ami(e)s de Romy — Carte de visite</title>
+<meta property="og:title" content="Les Ami(e)s de Romy">
+<meta property="og:description" content="{slogan}">
+<meta property="og:image" content="/static/romy_banner_new.png">
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+:root {{
+  --bleu-marine: #0a335c;
+  --vert-sauge: #6c9186;
+  --rose-pale: #dd83a9;
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --text: #2a2a2a;
+  --text-light: #666;
+  --radius: 16px;
+}}
+body {{
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, var(--bleu-marine) 0%, var(--vert-sauge) 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}}
+.carte {{
+  background: var(--surface);
+  border-radius: var(--radius);
+  max-width: 480px;
+  width: 100%;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: fadeIn 0.6s ease;
+}}
+@keyframes fadeIn {{
+  from {{ opacity: 0; transform: translateY(20px); }}
+  to {{ opacity: 1; transform: translateY(0); }}
+}}
+.carte-header {{
+  background: linear-gradient(135deg, var(--bleu-marine), var(--vert-sauge));
+  padding: 2rem 1.5rem 1.5rem;
+  text-align: center;
+  color: #fff;
+}}
+.carte-logo {{
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 4px solid rgba(255,255,255,0.3);
+  object-fit: cover;
+  margin: 0 auto .8rem;
+  display: block;
+  background: #fff;
+}}
+.carte-nom {{
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: .3rem;
+}}
+.carte-slogan {{
+  font-size: .95rem;
+  opacity: 0.9;
+  font-style: italic;
+}}
+.carte-body {{ padding: 1.5rem; }}
+.carte-mission {{
+  font-size: .9rem;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--bg);
+  border-radius: 12px;
+  border-left: 4px solid var(--vert-sauge);
+}}
+.carte-coords {{
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  margin-bottom: 1.5rem;
+}}
+.coord {{
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: .9rem;
+  color: var(--text);
+}}
+.coord-icon {{
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  font-size: 1rem;
+  flex-shrink: 0;
+}}
+.coord a {{ color: var(--bleu-marine); text-decoration: none; }}
+.coord a:hover {{ text-decoration: underline; }}
+.carte-evt {{
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(10,51,92,0.05), rgba(108,145,134,0.05));
+  border-radius: 12px;
+  border: 1px solid rgba(10,51,92,0.1);
+}}
+.evt-badge {{
+  display: inline-block;
+  background: var(--vert-sauge);
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .2rem .6rem;
+  border-radius: 20px;
+  margin-bottom: .5rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}}
+.evt-titre {{ font-weight: 700; color: var(--bleu-marine); margin-bottom: .3rem; font-size: 1.05rem; }}
+.evt-date {{ font-size: .85rem; color: var(--text); margin-bottom: .2rem; }}
+.evt-lieu {{ font-size: .85rem; color: var(--text-light); margin-bottom: .2rem; }}
+.evt-desc {{ font-size: .8rem; color: var(--text-light); line-height: 1.5; }}
+.evt-none {{ font-size: .85rem; color: var(--text-light); font-style: italic; }}
+.carte-qr {{
+  text-align: center;
+  margin-bottom: 1.5rem;
+}}
+.carte-qr-label {{
+  font-size: .8rem;
+  color: var(--text-light);
+  margin-bottom: .5rem;
+  font-weight: 600;
+}}
+.qr-box {{
+  display: inline-block;
+  padding: .6rem;
+  background: var(--surface);
+  border: 2px solid var(--bleu-marine);
+  border-radius: 12px;
+}}
+.qr-box img {{ width: 140px; height: 140px; display: block; }}
+.carte-social {{
+  display: flex;
+  justify-content: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}}
+.btn-social {{
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .6rem 1.2rem;
+  border-radius: 30px;
+  font-size: .85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform .2s, box-shadow .2s;
+}}
+.btn-social:hover {{ transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
+.btn-helloasso {{ background: var(--bleu-marine); color: #fff; }}
+.btn-mail {{ background: var(--vert-sauge); color: #fff; }}
+.btn-share {{ background: var(--rose-pale); color: #fff; }}
+.carte-footer {{
+  text-align: center;
+  padding: 1rem;
+  font-size: .75rem;
+  color: var(--text-light);
+  border-top: 1px solid #eee;
+}}
+.carte-footer a {{ color: var(--bleu-marine); }}
+@media (max-width: 520px) {{
+  .carte-logo {{ width: 90px; height: 90px; }}
+  .carte-nom {{ font-size: 1.25rem; }}
+  .qr-box img {{ width: 120px; height: 120px; }}
+  .btn-social {{ padding: .5rem .9rem; font-size: .8rem; }}
+}}
+</style>
+</head>
+<body>
+<div class="carte">
+  <div class="carte-header">
+    <img class="carte-logo" src="/static/romy_banner_new.png" alt="Logo Les Ami(e)s de Romy">
+    <div class="carte-nom">{nom_asso}</div>
+    <div class="carte-slogan">« {slogan} »</div>
+  </div>
+  <div class="carte-body">
+    <div class="carte-mission">{mission}</div>
+    <div class="carte-coords">
+      <div class="coord"><div class="coord-icon">✉️</div><a href="mailto:{email}">{email}</a></div>
+      <div class="coord"><div class="coord-icon">📞</div><a href="tel:{tel.replace(' ', '')}">{tel}</a></div>
+      <div class="coord"><div class="coord-icon">📍</div><span>{adresse}</span></div>
+    </div>
+    {evt_html}
+    <div class="carte-qr">
+      <div class="carte-qr-label">Scannez pour soutenir l'association</div>
+      <div class="qr-box">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data={helloasso_url}" alt="QR Code HelloAsso">
+      </div>
+    </div>
+    <div class="carte-social">
+      <a class="btn-social btn-helloasso" href="{helloasso_url}" target="_blank">❤️ Soutenir sur HelloAsso</a>
+      <a class="btn-social btn-mail" href="mailto:{email}">✉️ Nous écrire</a>
+      <a class="btn-social btn-share" href="javascript:void(0)" onclick="navigator.share?navigator.share({{title:'Les Ami(e)s de Romy',url:window.location.href}}):window.open(window.location.href)">📤 Partager</a>
+    </div>
+  </div>
+  <div class="carte-footer">
+    © {datetime.now().strftime('%Y')} Les Ami(e)s de Romy — CRM v{VERSION}
+  </div>
+</div>
+</body>
+</html>"""
+    return HTMLResponse(html_page)
+
+
+# ============ RECHERCHE GLOBALE ============
+@app.get("/api/search")
+async def global_search(q: str = Query("", min_length=0), user=Depends(require_auth)):
+    """Recherche globale sur tous les types de donnees.
+    Retourne une liste unifiee de resultats (type, id, titre, sous_titre, view, detail_fn).
+    Limite a 20 resultats. Les membres ne voient que les contacts autorises.
+    """
+    ql = q.strip().lower()
+    if not ql:
+        return []
+    data = load_db()
+    results = []
+    member = is_member(user)
+
+    # --- Contacts: nom/prenom/email/telephone ---
+    for c in data.get("contacts", []):
+        if member and c.get("qualite", "").lower() not in ("membre asso", "referent", "benevole"):
+            continue
+        hay = (c.get("prenom", "") + " " + c.get("nom", "") + " " + c.get("email", "") + " " + c.get("telephone", "")).lower()
+        if ql in hay:
+            results.append({
+                "type": "contact",
+                "id": c["id"],
+                "titre": f"{c.get('prenom', '')} {c.get('nom', '')}".strip(),
+                "sous_titre": c.get("qualite", "") or c.get("email", "") or c.get("telephone", "") or "-",
+                "view": "contacts",
+                "icon": "\U0001F464"
+            })
+
+    # --- Evenements: titre/lieu ---
+    for ev in data.get("evenements", []):
+        hay = (ev.get("titre", "") + " " + ev.get("lieu", "")).lower()
+        if ql in hay:
+            results.append({
+                "type": "evenement",
+                "id": ev["id"],
+                "titre": ev.get("titre", "") or "Evenement",
+                "sous_titre": f"{ev.get('date', '-')} {ev.get('lieu', '')}".strip(),
+                "view": "evenements",
+                "icon": "\U0001F4C5"
+            })
+
+    # --- Notes de frais: description ---
+    for n in data.get("notes_frais", []):
+        if member:
+            continue  # notes-frais reserved to referents
+        hay = (n.get("description", "") + " " + n.get("categorie", "")).lower()
+        if ql in hay:
+            results.append({
+                "type": "note_frais",
+                "id": n["id"],
+                "titre": n.get("description", "") or "Note de frais",
+                "sous_titre": f"{n.get('date', '-')} | {n.get('montant', '-')} EUR | {n.get('contact_nom', '-')}",
+                "view": "frais",
+                "icon": "\U0001F4B5"
+            })
+
+    # --- Votes: titre ---
+    for v in data.get("votes", []):
+        if member:
+            continue
+        hay = v.get("titre", "").lower()
+        if ql in hay:
+            results.append({
+                "type": "vote",
+                "id": v["id"],
+                "titre": v.get("titre", "") or "Vote",
+                "sous_titre": f"{v.get('date', '-')} | {v.get('type_vote', '-')}",
+                "view": "votes",
+                "icon": "\U0001F3F3"
+            })
+
+    # --- Comptes-rendus: ordre_du_jour + titre ---
+    for cr in data.get("comptes_rendus", []):
+        hay = (cr.get("titre", "") + " " + cr.get("ordre_du_jour", "")).lower()
+        if ql in hay:
+            results.append({
+                "type": "cr",
+                "id": cr["id"],
+                "titre": cr.get("titre", "") or "Compte-rendu",
+                "sous_titre": f"{cr.get('date', '-')} | {cr.get('type_reunion', '-')}",
+                "view": "crs",
+                "icon": "\U0001F4DD"
+            })
+
+    # --- Accompagnements: nom du contact (resolu) ---
+    if not member:
+        contact_by_id = {c["id"]: c for c in data.get("contacts", [])}
+        for a in data.get("accompagnements", []):
+            c = contact_by_id.get(a.get("contact_id", ""))
+            nom = f"{c.get('prenom', '')} {c.get('nom', '')}".strip() if c else ""
+            hay = (nom + " " + a.get("type_suivi", "")).lower()
+            if ql in hay:
+                results.append({
+                    "type": "accompagnement",
+                    "id": a["id"],
+                    "titre": nom or a.get("type_suivi", "") or "Accompagnement",
+                    "sous_titre": f"{a.get('statut', '-')} | {a.get('type_suivi', '-')} | {a.get('date_debut', '-')}",
+                    "view": "accompagnements",
+                    "icon": "\U0001F46A"
+                })
+
+    # --- Documents: nom ---
+    if not member:
+        for d in data.get("documents", []):
+            hay = (d.get("nom", "") + " " + d.get("type_doc", "") + " " + d.get("description", "")).lower()
+            if ql in hay:
+                results.append({
+                    "type": "document",
+                    "id": d["id"],
+                    "titre": d.get("nom", "") or "Document",
+                    "sous_titre": f"{d.get('type_doc', '-')} | {d.get('cree_par', '-')}",
+                    "view": "documents",
+                    "icon": "\U0001F4C4"
+                })
+
+    # --- Dons: donateur (nom) ---
+    if not member:
+        for d in data.get("dons", []):
+            hay = (d.get("nom", "") + " " + d.get("type_don", "") + " " + d.get("notes", "")).lower()
+            if ql in hay:
+                results.append({
+                    "type": "don",
+                    "id": d["id"],
+                    "titre": d.get("nom", "") or "Don",
+                    "sous_titre": f"{d.get('montant', '-')} EUR | {d.get('date', '-')} | {d.get('type_don', '-')}",
+                    "view": "dons",
+                    "icon": "\U0001F381"
+                })
+
+    # --- Taches: titre ---
+    if not member:
+        for t in data.get("taches", []):
+            hay = (t.get("titre", "") + " " + t.get("description", "")).lower()
+            if ql in hay:
+                results.append({
+                    "type": "tache",
+                    "id": t["id"],
+                    "titre": t.get("titre", "") or "Tache",
+                    "sous_titre": f"{t.get('priorite', '-')} | {t.get('statut', '-')}",
+                    "view": "taches",
+                    "icon": "\u2705"
+                })
+
+    # Limite globale a 20 resultats
+    return results[:20]
+
+
 # ============ STATIC FILES + SPA ============
 @app.get("/")
 async def index():
@@ -1697,6 +2322,24 @@ async def favicon():
     return Response(b"", media_type="image/x-icon")
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+# Monter uploads en statique pour accès aux justificatifs et photos événements
+try:
+    app.mount("/uploads", StaticFiles(directory=str(DOCS_DIR)), name="uploads")
+except RuntimeError:
+    pass  # déjà monté ou dossier manquant
+
+# Endpoint pour visualiser une facture depuis le stockage Nipogi
+@app.get("/api/frais/image/{filename}")
+async def get_facture_image(filename: str, user=Depends(require_auth)):
+    safe_name = re.sub(r'[^\w.-]', '_', filename)
+    if ".." in safe_name or "/" in safe_name:
+        raise HTTPException(status_code=400, detail="Nom de fichier invalide")
+    # Chercher dans le Nipogi d'abord, puis local
+    for d in (STORAGE_DIR / "uploads" / "factures", DOCS_DIR / "factures"):
+        filepath = d / safe_name
+        if filepath.is_file():
+            return FileResponse(str(filepath))
+    raise HTTPException(status_code=404, detail="Facture non trouvee")
 
 # ============ IMPORT EXCEL ============
 @app.post("/api/import/excel")
@@ -2054,6 +2697,243 @@ L equipe des Ami(e)s de Romy"""
     save_db(data)
     
     return {"status": "ok", "envoyes": len(recipients), "destinataires": [c["email"] for c in a_relancer]}
+
+
+# ============ FEATURE 2: SUIVI ADHESIONS ============
+@app.get("/api/adhesions/suivi")
+async def suivi_adhesions(user=Depends(require_referent)):
+    """Pour chaque contact: statut cotisation (a_jour/expiree/en_retard/sans), annee derniere cotisation, jours depuis expiration."""
+    data = load_db()
+    contacts = data.get("contacts", [])
+    cotisations = data.get("cotisations", [])
+    today = datetime.now()
+    annee_courante = str(today.year)
+
+    # Index: contact_id -> cotisation la plus recente (annee maximale, statut paye)
+    derniere_cot = {}
+    for cot in cotisations:
+        cid = cot.get("contact_id", "")
+        if not cid:
+            continue
+        annee = cot.get("annee", "")
+        # On ne considere que les cotisations payees pour le suivi d'adhesion
+        if cot.get("statut") != "paye":
+            continue
+        prev = derniere_cot.get(cid)
+        if prev is None or (annee and annee > prev.get("annee", "")):
+            derniere_cot[cid] = cot
+
+    resultats = []
+    for c in contacts:
+        cid = c.get("id", "")
+        nom = f"{c.get('prenom','')} {c.get('nom','')}".strip()
+        email = c.get("email", "")
+        qualite = c.get("qualite", "")
+
+        cot = derniere_cot.get(cid)
+        if cot is None:
+            # Aucune cotisation payee enregistree
+            resultats.append({
+                "contact_id": cid,
+                "contact_nom": nom,
+                "email": email,
+                "qualite": qualite,
+                "statut": "sans",
+                "annee_derniere_cotisation": None,
+                "jours_depuis_expiration": None
+            })
+            continue
+
+        annee_derniere = cot.get("annee", "")
+        # L'adhesion expire le 31/12 de l'annee de cotisation + 1 an
+        # Donc pour cotisation annee N, expiration = 31/12/(N+1)
+        try:
+            annee_int = int(annee_derniere)
+            date_expiration = datetime(annee_int + 1, 12, 31)
+            jours_exp = (today - date_expiration).days
+        except (ValueError, TypeError):
+            jours_exp = None
+
+        # Determiner le statut
+        # a_jour: derniere cotisation = annee courante ou jour d'expiration non atteint
+        # expiree: expiration dans 30 jours ou moins (bientot)
+        # en_retard: deja expiree
+        # sans: aucune cotisation
+        if jours_exp is not None:
+            if jours_exp <= 0 and annee_derniere == annee_courante:
+                # A jour pour l'annee courante
+                statut = "a_jour"
+            elif jours_exp <= 0:
+                # Pas encore expiree (annee precedente mais pas encore en retard)
+                # Verifier si l'expiration est dans moins de 30 jours (negatif = bientot)
+                statut = "a_jour"
+            elif jours_exp <= 30:
+                # Expire depuis moins de 30 jours = expire bientot (en fait deja expire, mais recent)
+                statut = "expiree"
+            else:
+                # Expire depuis plus de 30 jours
+                statut = "en_retard"
+        else:
+            statut = "sans"
+
+        resultats.append({
+            "contact_id": cid,
+            "contact_nom": nom,
+            "email": email,
+            "qualite": qualite,
+            "statut": statut,
+            "annee_derniere_cotisation": annee_derniere,
+            "jours_depuis_expiration": jours_exp
+        })
+
+    # Trier: en_retard > expiree > sans > a_jour
+    ordre = {"en_retard": 0, "expiree": 1, "sans": 2, "a_jour": 3}
+    resultats.sort(key=lambda r: (ordre.get(r["statut"], 4), r.get("contact_nom", "")))
+
+    # Statistiques resumees
+    resume = {
+        "total": len(resultats),
+        "a_jour": sum(1 for r in resultats if r["statut"] == "a_jour"),
+        "expiree": sum(1 for r in resultats if r["statut"] == "expiree"),
+        "en_retard": sum(1 for r in resultats if r["statut"] == "en_retard"),
+        "sans": sum(1 for r in resultats if r["statut"] == "sans")
+    }
+
+    return {"contacts": resultats, "resume": resume}
+
+
+@app.post("/api/adhesions/relance-auto")
+async def relance_auto_adhesions(user=Depends(require_referent)):
+    """Envoie un email automatique aux adherents dont la cotisation expire dans 30 jours ou est deja expiree."""
+    data = load_db()
+    contacts = data.get("contacts", [])
+    cotisations = data.get("cotisations", [])
+    today = datetime.now()
+    annee_courante = str(today.year)
+
+    # Index: contact_id -> cotisation payee la plus recente
+    derniere_cot = {}
+    for cot in cotisations:
+        cid = cot.get("contact_id", "")
+        if not cid or cot.get("statut") != "paye":
+            continue
+        annee = cot.get("annee", "")
+        prev = derniere_cot.get(cid)
+        if prev is None or (annee and annee > prev.get("annee", "")):
+            derniere_cot[cid] = cot
+
+    a_relancer = []
+    contacts_sans_cot = []
+
+    for c in contacts:
+        cid = c.get("id", "")
+        email = c.get("email", "")
+        if not email:
+            continue
+
+        cot = derniere_cot.get(cid)
+        if cot is None:
+            # Sans cotisation - relancer aussi
+            contacts_sans_cot.append(c)
+            a_relancer.append({"contact": c, "type": "sans", "annee": None, "jours_exp": None})
+            continue
+
+        annee_derniere = cot.get("annee", "")
+        try:
+            annee_int = int(annee_derniere)
+            date_expiration = datetime(annee_int + 1, 12, 31)
+            jours_exp = (today - date_expiration).days
+        except (ValueError, TypeError):
+            continue
+
+        # Relancer si: expire dans 30 jours (jours_exp >= -30 et <= 0) OU deja expiree (jours_exp > 0)
+        # jours_exp negatif = pas encore expiree; -30 a 0 = expire bientot; >0 = deja expiree
+        if -30 <= jours_exp <= 0:
+            a_relancer.append({"contact": c, "type": "expire_bientot", "annee": annee_derniere, "jours_exp": jours_exp})
+        elif jours_exp > 0:
+            a_relancer.append({"contact": c, "type": "expiree", "annee": annee_derniere, "jours_exp": jours_exp})
+
+    if not a_relancer:
+        return {"status": "ok", "envoyes": 0, "message": "Aucun adherent a relancer (tous a jour ou sans email)"}
+
+    smtp = load_smtp()
+    if not smtp.get("password"):
+        raise HTTPException(status_code=400, detail="SMTP non configure (smtp_config.json)")
+
+    envoyes = 0
+    erreurs = []
+    for item in a_relancer:
+        c = item["contact"]
+        email = c.get("email", "")
+        if not email:
+            continue
+        nom = f"{c.get('prenom','')} {c.get('nom','')}".strip()
+
+        if item["type"] == "expire_bientot":
+            sujet = f"Votre cotisation arrive a echeance - Les Ami(e)s de Romy"
+            corps = f"""Bonjour {nom},
+
+Votre cotisation annuelle pour l association Les Ami(e)s de Romy arrive a echeance prochainement.
+
+Derniere cotisation enregistree: {item['annee']}
+Nous vous invitons a regulariser votre cotisation pour l annee en cours.
+
+Montant de la cotisation: a definir selon le bareme de l association.
+Mode de paiement: especes, cheque ou virement.
+
+Pour toute question, n hesitez pas a nous contacter.
+
+Cordialement,
+L equipe des Ami(e)s de Romy"""
+        elif item["type"] == "expiree":
+            sujet = f"Relance cotisation - Les Ami(e)s de Romy"
+            corps = f"""Bonjour {nom},
+
+Votre cotisation annuelle pour l association Les Ami(e)s de Romy est expiree depuis {item['jours_exp']} jours.
+
+Derniere cotisation enregistree: {item['annee']}
+Nous vous invitons a regulariser votre situation des que possible.
+
+Montant de la cotisation: a definir selon le bareme de l association.
+Mode de paiement: especes, cheque ou virement.
+
+Pour toute question, n hesitez pas a nous contacter.
+
+Cordialement,
+L equipe des Ami(e)s de Romy"""
+        else:  # sans cotisation
+            sujet = f"Cotisation annuelle - Les Ami(e)s de Romy"
+            corps = f"""Bonjour {nom},
+
+Nous vous contactons concernant votre cotisation annuelle pour l association Les Ami(e)s de Romy.
+
+Aucune cotisation n est actuellement enregistree a votre nom.
+Nous vous invitons a regulariser votre adhesion.
+
+Montant de la cotisation: a definir selon le bareme de l association.
+Mode de paiement: especes, cheque ou virement.
+
+Pour toute question, n hesitez pas a nous contacter.
+
+Cordialement,
+L equipe des Ami(e)s de Romy"""
+
+        try:
+            send_email_smtp([email], sujet, corps)
+            envoyes += 1
+            add_history(c, user, "relance_adhesion", f"Relance auto ({item['type']}) envoyee a {email}")
+        except Exception as e:
+            erreurs.append({"email": email, "erreur": str(e)})
+
+    save_db(data)
+
+    return {
+        "status": "ok",
+        "envoyes": envoyes,
+        "erreurs": erreurs,
+        "total_a_relancer": len(a_relancer),
+        "destinataires": [item["contact"].get("email", "") for item in a_relancer if item["contact"].get("email")]
+    }
 
 
 # ============ F1: TABLEAU DE BORD D'IMPACT ============
@@ -2435,6 +3315,206 @@ async def total_notes_frais(user=Depends(require_referent)):
     }
 
 
+# ---- OCR factures via Tesseract (local, sans Ollama) ----
+# Les factures sont stockées dans uploads/factures/
+_NIPOGI_FACTURES = STORAGE_DIR / "uploads" / "factures"
+_LOCAL_FACTURES = DOCS_DIR / "factures"
+FACTURES_DIR = _NIPOGI_FACTURES if _NIPOGI_FACTURES.is_dir() else _LOCAL_FACTURES
+try:
+    FACTURES_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    FACTURES_DIR = _LOCAL_FACTURES
+    FACTURES_DIR.mkdir(exist_ok=True)
+
+# Tesseract OCR — installé dans le conteneur via apt + pip
+try:
+    import pytesseract
+    from PIL import Image as PILImage
+    _TESSERACT_OK = True
+except ImportError:
+    _TESSERACT_OK = False
+
+
+def _extract_ocr_data(image_bytes: bytes) -> dict:
+    """Extract invoice data from image using Tesseract OCR + regex parsing."""
+    if not _TESSERACT_OK:
+        raise RuntimeError("Tesseract non installe")
+    
+    import io as _io
+    import re as _re
+    
+    img = PILImage.open(_io.BytesIO(image_bytes))
+    # Run OCR with French language
+    raw_text = pytesseract.image_to_string(img, lang="fra+eng")
+    
+    # Extract data with regex
+    result = {"montant": 0.0, "date": "", "fournisseur": "", "categorie": "autre", "description": ""}
+    
+    # Montant: look for patterns like "Total: 42,50 €" or "42.50 EUR" or "Total TTC: 25,50"
+    montant_patterns = [
+        r'(?:total\s*(?:ttc)?\s*[:\-]?\s*)(\d+[.,]\d{1,2})\s*(?:€|EUR|euro)?',
+        r'(\d+[.,]\d{2})\s*(?:€|EUR|euro)',
+        r'montant\s*(?:total\s*)?[:\-]?\s*(\d+[.,]\d{1,2})',
+    ]
+    for pat in montant_patterns:
+        m = _re.search(pat, raw_text, _re.IGNORECASE)
+        if m:
+            val = m.group(1).replace(",", ".")
+            try:
+                result["montant"] = float(val)
+                break
+            except ValueError:
+                pass
+    
+    # Date: look for DD/MM/YYYY or DD-MM-YYYY or YYYY-MM-DD
+    date_patterns = [
+        r'(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})',
+        r'(\d{4}-\d{2}-\d{2})',
+        r'date\s*[:\-]?\s*(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})',
+    ]
+    for pat in date_patterns:
+        m = _re.search(pat, raw_text, _re.IGNORECASE)
+        if m:
+            date_str = m.group(1)
+            # Normalize to YYYY-MM-DD
+            try:
+                parts = _re.split(r'[/.-]', date_str)
+                if len(parts[0]) == 4:  # YYYY-MM-DD
+                    result["date"] = date_str
+                elif len(parts[2]) == 4:  # DD/MM/YYYY
+                    result["date"] = f"{parts[2]}-{int(parts[1]):02d}-{int(parts[0]):02d}"
+                else:  # DD/MM/YY
+                    year = parts[2]
+                    if len(year) == 2:
+                        year = "20" + year
+                    result["date"] = f"{year}-{int(parts[1]):02d}-{int(parts[0]):02d}"
+                break
+            except (ValueError, IndexError):
+                pass
+    
+    # Fournisseur: first non-empty line that's not a date or "facture"
+    lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
+    skip_words = {"facture", "ticket", "total", "date", "montant", "tva", "€", "eur"}
+    for line in lines[:10]:
+        lower = line.lower()
+        if not any(w in lower for w in skip_words) and not _re.match(r'^\d', line) and len(line) > 2:
+            result["fournisseur"] = line[:100]
+            break
+    
+    # Categorie: guess from keywords
+    text_lower = raw_text.lower()
+    if any(w in text_lower for w in ["repas", "restaurant", "cafe", "boulanger", "pizzeria", "mcdonald", "bar"]):
+        result["categorie"] = "repas"
+    elif any(w in text_lower for w in ["essence", "train", "bus", "metro", "taxi", "parking", "peage", "deplacement", "km"]):
+        result["categorie"] = "deplacement"
+    elif any(w in text_lower for w in ["fourniture", "papeterie", "bureau", "stylo", "classeur"]):
+        result["categorie"] = "fournitures"
+    elif any(w in text_lower for w in ["telephone", "internet", "mobile", "forfait", "communication"]):
+        result["categorie"] = "communication"
+    
+    # Description: first meaningful line after fournisseur
+    result["description"] = (result["fournisseur"] or "Facture")[:100]
+    
+    return result
+
+
+@app.post("/api/frais/ocr")
+async def ocr_facture(request: Request, user=Depends(require_referent)):
+    """Upload a facture image, save it, and run OCR via Ollama to extract data."""
+    form = await request.form()
+    file = form.get("file")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Fichier image requis")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"):
+        raise HTTPException(status_code=400, detail="Format image requis (jpg, png, gif, webp)")
+
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image trop volumineuse (max 20 Mo)")
+
+    safe_name = re.sub(r'[^\w.-]', '_', file.filename).replace("..", "").replace("/", "").replace("\\", "")
+    if not safe_name:
+        safe_name = f"facture_{secrets.token_hex(4)}{ext}"
+    dest = FACTURES_DIR / safe_name
+    if dest.exists():
+        stem = Path(safe_name).stem
+        dest = FACTURES_DIR / f"{stem}_{secrets.token_hex(4)}{ext}"
+        safe_name = dest.name
+    with open(dest, "wb") as f:
+        f.write(content)
+
+    try:
+        ocr_data = _extract_ocr_data(content)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail=f"OCR indisponible: {e}")
+
+    ocr_data["image_path"] = safe_name
+    return ocr_data
+
+
+@app.post("/api/frais/scan-and-create")
+async def scan_and_create_note_frais(request: Request, user=Depends(require_referent)):
+    """Upload image, OCR it, and create a note de frais in one step."""
+    form = await request.form()
+    file = form.get("file")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Fichier image requis")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"):
+        raise HTTPException(status_code=400, detail="Format image requis (jpg, png, gif, webp)")
+
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image trop volumineuse (max 20 Mo)")
+
+    safe_name = re.sub(r'[^\w.-]', '_', file.filename).replace("..", "").replace("/", "").replace("\\", "")
+    if not safe_name:
+        safe_name = f"facture_{secrets.token_hex(4)}{ext}"
+    dest = FACTURES_DIR / safe_name
+    if dest.exists():
+        stem = Path(safe_name).stem
+        dest = FACTURES_DIR / f"{stem}_{secrets.token_hex(4)}{ext}"
+        safe_name = dest.name
+    with open(dest, "wb") as f:
+        f.write(content)
+
+    try:
+        ocr_data = _extract_ocr_data(content)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail=f"OCR indisponible: {e}")
+
+    ocr_data["image_path"] = safe_name
+
+    # Create note de frais
+    data = load_db()
+    if "notes_frais" not in data:
+        data["notes_frais"] = []
+    n = {
+        "id": f"nf-{secrets.token_hex(8)}",
+        "contact_id": "",
+        "date": ocr_data.get("date", ""),
+        "montant": ocr_data.get("montant", 0),
+        "categorie": ocr_data.get("categorie", "autre"),
+        "description": ocr_data.get("description", ""),
+        "justificatif": safe_name,
+        "statut": "en_attente",
+        "cree_par": user["username"],
+        "cree_le": now_iso()
+    }
+    data["notes_frais"].append(n)
+    save_db(data)
+    backup_db()
+
+    return {"status": "ok", "note_frais": n, "ocr": ocr_data}
+
+
 # ============ F7: ECHEANCES & RAPPELS ============
 @app.get("/api/echeances")
 async def list_echeances(statut: str = "", user=Depends(require_referent)):
@@ -2791,6 +3871,165 @@ async def delete_compte_rendu(cr_id: str, user=Depends(require_referent)):
     return {"status": "ok"}
 
 
+# ============ F12b: GENERATEUR DE PV DE REUNION ============
+@app.get("/api/cr/{cr_id}/pv")
+async def generate_pv(cr_id: str, token: str = ""):
+    """Genere un PV de reunion au format HTML imprimable. Token en query car window.open ne peut pas envoyer de header."""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Token invalide")
+    data = load_db()
+    contact_by_id = {c["id"]: c for c in data.get("contacts", [])}
+
+    # Find the CR
+    cr = None
+    for c in data.get("comptes_rendus", []):
+        if c["id"] == cr_id:
+            cr = c
+            break
+    if not cr:
+        raise HTTPException(status_code=404, detail="Compte-rendu non trouve")
+
+    # Helper to resolve contact names
+    def noms(ids):
+        return [f"{contact_by_id.get(cid, {}).get('prenom', '')} {contact_by_id.get(cid, {}).get('nom', '')}".strip()
+                for cid in (ids or []) if contact_by_id.get(cid)]
+
+    presents_noms = noms(cr.get("presents", []))
+    absents_noms = noms(cr.get("absents", []))
+    excused_noms = noms(cr.get("excused", []))
+
+    # Date formatting
+    date_cr = cr.get("date", "")
+    try:
+        date_fmt = datetime.fromisoformat(date_cr).strftime("%d/%m/%Y") if date_cr else "-"
+    except Exception:
+        date_fmt = date_cr or "-"
+
+    type_reunion = cr.get("type_reunion", "reunion")
+    type_label = {"ag": "Assemblee Generale", "ca": "Conseil d'Administration",
+                  "bureau": "Reunion de Bureau", "reunion": "Reunion"}.get(type_reunion, type_reunion)
+
+    # Votes: filter by same date as CR (or all if no date)
+    votes = data.get("votes", [])
+    votes_cr = [v for v in votes if v.get("date", "") == date_cr] if date_cr else []
+    # If no votes match the exact date, include all votes of same type_vote
+    if not votes_cr:
+        votes_cr = [v for v in votes if v.get("type_vote", "") == type_reunion]
+
+    # Build votes HTML
+    votes_html = ""
+    if votes_cr:
+        votes_html = "<h2>Votes et Resolutions</h2>"
+        for v in votes_cr:
+            r = v.get("resultat", {})
+            pour = r.get("pour", 0)
+            contre = r.get("contre", 0)
+            abstention = r.get("abstention", 0)
+            statut = v.get("statut", "ouvert")
+            _notes = v.get("notes", "")
+            _notes_html = f'<p style="font-size:.85rem"><em>Notes: {_notes}</em></p>' if _notes else ""
+            votes_html += f"""
+<div style="border:1px solid #ddd;border-radius:8px;padding:1rem;margin-bottom:1rem">
+<h3 style="margin-top:0;color:#0a335c">{v.get('titre', '')}</h3>
+<p style="color:#666;font-size:.85rem">{v.get('description', '')}</p>
+<table style="width:100%;border-collapse:collapse;margin:.5rem 0">
+<tr><th style="background:#6c9186;color:#fff;padding:.4rem;text-align:center">Pour</th>
+<th style="background:#dd83a9;color:#fff;padding:.4rem;text-align:center">Contre</th>
+<th style="background:#999;color:#fff;padding:.4rem;text-align:center">Abstention</th></tr>
+<tr><td style="text-align:center;padding:.4rem;border:1px solid #eee;font-size:1.2rem;font-weight:bold">{pour}</td>
+<td style="text-align:center;padding:.4rem;border:1px solid #eee;font-size:1.2rem;font-weight:bold">{contre}</td>
+<td style="text-align:center;padding:.4rem;border:1px solid #eee;font-size:1.2rem;font-weight:bold">{abstention}</td></tr>
+</table>
+<p style="font-size:.8rem;color:#999">Statut: {statut}</p>
+{_notes_html}
+</div>"""
+    else:
+        votes_html = '<h2>Votes et Resolutions</h2><p style="color:#999;font-style:italic">Aucun vote enregistre pour cette reunion.</p>'
+
+    # Build discussions / decisions / actions sections
+    def text_section(title, content):
+        if not content:
+            return ""
+        # Escape HTML and convert newlines to <br>
+        safe = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+        return f"<h2>{title}</h2><div style=\"white-space:pre-wrap\">{safe}</div>"
+
+    discussions_html = text_section("Discussions", cr.get("discussions", ""))
+    decisions_html = text_section("Decisions", cr.get("decisions", ""))
+    actions_html = text_section("Actions a suivre", cr.get("actions", ""))
+
+    # Ordre du jour
+    odj = cr.get("ordre_du_jour", "")
+    odj_html = ""
+    if odj:
+        safe_odj = odj.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+        odj_html = f"<h2>Ordre du Jour</h2><div style=\"white-space:pre-wrap\">{safe_odj}</div>"
+    else:
+        odj_html = "<h2>Ordre du Jour</h2><p style=\"color:#999;font-style:italic\">Non precise</p>"
+
+    # Presents / Absents / Excuses lists
+    def list_html(label, noms_list, color):
+        if not noms_list:
+            return f"<p><strong>{label}:</strong> <span style=\"color:#999;font-style:italic\">Aucun</span></p>"
+        return f"<p><strong>{label}:</strong> {', '.join(noms_list)}</p>"
+
+    html = f"""<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<title>PV - {cr.get('titre', 'Reunion')}</title>
+<style>
+@page {{ margin: 2cm }}
+body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; color: #333 }}
+h1 {{ color: #0a335c; text-align: center; border-bottom: 3px solid #0a335c; padding-bottom: .5rem; margin-bottom: .3rem }}
+h2 {{ color: #0a335c; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .3rem }}
+.subtitle {{ text-align: center; color: #666; margin-bottom: 2rem }}
+.info-box {{ background: #f5f5f5; border-radius: 8px; padding: 1rem; margin: 1rem 0 }}
+table {{ width: 100%; border-collapse: collapse }}
+.signatures {{ margin-top: 3rem; display: flex; justify-content: space-between; gap: 2rem }}
+.sig-block {{ flex: 1; text-align: center }}
+.sig-line {{ border-top: 1px solid #333; margin-top: 3rem; padding-top: .3rem; font-size: .85rem; color: #666 }}
+.footer {{ margin-top: 3rem; text-align: center; font-size: .8rem; color: #999 }}
+@media print {{ body {{ max-width: none; padding: 0 }} .no-print {{ display: none }} }}
+</style>
+</head><body>
+<h1>PROCES-VERBAL</h1>
+<p class="subtitle">{type_label} — Les Ami(e)s de Romy</p>
+<p style="text-align:center;color:#666">Association de prevention des violences infantiles</p>
+
+<div class="info-box">
+<p><strong>Date:</strong> {date_fmt}</p>
+<p><strong>Type de reunion:</strong> {type_label}</p>
+<p><strong>Titre:</strong> {cr.get('titre', '')}</p>
+</div>
+
+<h2>Presence</h2>
+{list_html('Presents', presents_noms, '#6c9186')}
+{list_html('Absents', absents_noms, '#dd83a9')}
+{list_html('Excuses', excused_noms, '#999')}
+
+{odj_html}
+
+{discussions_html}
+
+{decisions_html}
+
+{votes_html}
+
+{actions_html}
+
+<h2>Signatures</h2>
+<div class="signatures">
+<div class="sig-block"><div class="sig-line">President(e) de seance</div></div>
+<div class="sig-block"><div class="sig-line">Secretaire de seance</div></div>
+</div>
+
+<div class="footer">PV genere le {datetime.now().strftime("%d/%m/%Y")} par {user["username"]} — CRM Les Ami(e)s de Romy v{VERSION}</div>
+<div class="no-print" style="text-align:center;margin-top:1rem"><button onclick="window.print()" style="padding:.5rem 1.5rem;font-size:1rem;cursor:pointer;border-radius:8px;border:1px solid #0a335c;background:#0a335c;color:#fff">Imprimer / PDF</button></div>
+</body></html>"""
+
+    return HTMLResponse(content=html)
+
+
 # ============ F13: CAMPAGNES SMS / WHATSAPP ============
 @app.get("/api/sms-campaigns")
 async def list_sms_campaigns(user=Depends(require_referent)):
@@ -2963,6 +4202,923 @@ async def update_mon_profil(req: MembreProfilUpdate, user=Depends(require_auth))
                 save_db(data); backup_db()
             return {"status": "ok", "contact": c}
     raise HTTPException(status_code=404, detail="Contact non trouve")
+
+
+# ============ STORAGE (Nipogi via SSHFS) ENDPOINTS ============
+import shutil as _shutil
+
+def _validate_storage_filename(filename: str) -> str:
+    """Sanitize a filename for storage: no path traversal, no separators."""
+    if not filename or not filename.strip():
+        raise HTTPException(status_code=400, detail="Nom de fichier requis")
+    # Remove any path components
+    safe = os.path.basename(filename)
+    # Remove .. and separators
+    safe = safe.replace("..", "").replace("/", "").replace("\\", "")
+    # Allow only safe characters
+    safe = re.sub(r'[^\w\.-]', '_', safe)
+    if not safe:
+        raise HTTPException(status_code=400, detail="Nom de fichier invalide")
+    return safe
+
+def _storage_available() -> bool:
+    """Check if the Nipogi SSHFS mount is accessible."""
+    return STORAGE_DIR.is_dir() and STORAGE_UPLOADS.is_dir()
+
+def _file_type(filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    types = {
+        ".pdf": "PDF", ".jpg": "Image", ".jpeg": "Image", ".png": "Image",
+        ".gif": "Image", ".webp": "Image", ".doc": "Word", ".docx": "Word",
+        ".xls": "Excel", ".xlsx": "Excel", ".ppt": "PowerPoint", ".pptx": "PowerPoint",
+        ".txt": "Texte", ".csv": "CSV", ".zip": "Archive", ".mp4": "Video",
+        ".avi": "Video", ".mov": "Video", ".mp3": "Audio", ".wav": "Audio",
+        ".odt": "OpenDocument", ".ods": "OpenDocument", ".odp": "OpenDocument",
+        ".rtf": "RTF",
+    }
+    return types.get(ext, "Autre")
+
+@app.post("/api/storage/upload")
+async def storage_upload(request: Request, user=Depends(require_auth)):
+    """Upload a file to the Nipogi storage (uploads/ subfolder)."""
+    if not _storage_available():
+        raise HTTPException(status_code=503, detail="Stockage Nipogi non disponible (montage SSHFS inaccessible)")
+    form = await request.form()
+    file = form.get("file")
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Fichier requis")
+
+    ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".doc", ".docx",
+                          ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".odt", ".ods",
+                          ".odp", ".rtf", ".zip", ".mp4", ".avi", ".mov", ".mp3", ".wav"}
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Type de fichier non autorise: {ext}")
+
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 Mo for Nipogi storage
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 100 Mo)")
+
+    safe_name = _validate_storage_filename(file.filename)
+    # Avoid overwriting: append suffix if file exists
+    dest = STORAGE_UPLOADS / safe_name
+    if dest.exists():
+        stem = Path(safe_name).stem
+        dest = STORAGE_UPLOADS / f"{stem}_{secrets.token_hex(4)}{ext}"
+        safe_name = dest.name
+
+    with open(dest, "wb") as f:
+        f.write(content)
+
+    return {
+        "status": "ok",
+        "file": {
+            "filename": safe_name,
+            "taille": len(content),
+            "type": _file_type(safe_name),
+            "date": now_iso(),
+            "uploaded_by": user["username"],
+            "subfolder": "uploads",
+        }
+    }
+
+@app.get("/api/storage/files")
+async def storage_files(subfolder: str = "uploads", user=Depends(require_auth)):
+    """List files stored on the Nipogi storage."""
+    if not _storage_available():
+        raise HTTPException(status_code=503, detail="Stockage Nipogi non disponible")
+
+    valid_subfolders = {"uploads", "documents", "backups", "archives"}
+    if subfolder not in valid_subfolders:
+        raise HTTPException(status_code=400, detail="Sous-dossier invalide")
+
+    target_dir = STORAGE_DIR / subfolder
+    if not target_dir.is_dir():
+        return []
+
+    files = []
+    for f in sorted(target_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+        if f.is_file():
+            stat = f.stat()
+            files.append({
+                "filename": f.name,
+                "taille": stat.st_size,
+                "type": _file_type(f.name),
+                "date": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "subfolder": subfolder,
+            })
+    return files
+
+@app.get("/api/storage/download/{filename}")
+async def storage_download(filename: str, subfolder: str = "uploads", user=Depends(require_auth)):
+    """Download a file from the Nipogi storage."""
+    if not _storage_available():
+        raise HTTPException(status_code=503, detail="Stockage Nipogi non disponible")
+
+    valid_subfolders = {"uploads", "documents", "backups", "archives"}
+    if subfolder not in valid_subfolders:
+        raise HTTPException(status_code=400, detail="Sous-dossier invalide")
+
+    safe_name = _validate_storage_filename(filename)
+    filepath = STORAGE_DIR / subfolder / safe_name
+    # Extra safety: ensure the resolved path is within the storage directory
+    if not str(filepath.resolve()).startswith(str(STORAGE_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Chemin invalide")
+    if not filepath.exists() or not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+
+    return FileResponse(str(filepath), filename=safe_name)
+
+@app.delete("/api/storage/{filename}")
+async def storage_delete(filename: str, subfolder: str = "uploads", user=Depends(require_referent)):
+    """Delete a file from the Nipogi storage. Referent/admin only."""
+    if not _storage_available():
+        raise HTTPException(status_code=503, detail="Stockage Nipogi non disponible")
+
+    valid_subfolders = {"uploads", "documents", "backups", "archives"}
+    if subfolder not in valid_subfolders:
+        raise HTTPException(status_code=400, detail="Sous-dossier invalide")
+
+    safe_name = _validate_storage_filename(filename)
+    filepath = STORAGE_DIR / subfolder / safe_name
+    if not str(filepath.resolve()).startswith(str(STORAGE_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Chemin invalide")
+    if not filepath.exists() or not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+
+    filepath.unlink()
+    return {"status": "ok", "deleted": safe_name}
+
+class ArchiveRequest(BaseModel):
+    filename: str
+    source_subfolder: str = "uploads"
+
+@app.post("/api/storage/archive")
+async def storage_archive(req: ArchiveRequest, user=Depends(require_referent)):
+    """Move a file from uploads/ (Pi) to archives/ (Nipogi) to free Pi space. Referent/admin only."""
+    if not _storage_available():
+        raise HTTPException(status_code=503, detail="Stockage Nipogi non disponible")
+
+    safe_name = _validate_storage_filename(req.filename)
+    valid_sources = {"uploads", "documents"}
+    if req.source_subfolder not in valid_sources:
+        raise HTTPException(status_code=400, detail="Sous-dossier source invalide")
+
+    source_path = STORAGE_DIR / req.source_subfolder / safe_name
+    if not str(source_path.resolve()).startswith(str(STORAGE_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Chemin invalide")
+    if not source_path.exists() or not source_path.is_file():
+        raise HTTPException(status_code=404, detail="Fichier source introuvable")
+
+    dest_path = STORAGE_ARCHIVES / safe_name
+    if dest_path.exists():
+        stem = Path(safe_name).stem
+        ext = Path(safe_name).suffix
+        dest_path = STORAGE_ARCHIVES / f"{stem}_{secrets.token_hex(4)}{ext}"
+
+    _shutil.move(str(source_path), str(dest_path))
+
+    return {
+        "status": "ok",
+        "archived": dest_path.name,
+        "source": req.source_subfolder,
+        "destination": "archives",
+        "archived_by": user["username"],
+    }
+
+@app.get("/api/storage/stats")
+async def storage_stats(user=Depends(require_auth)):
+    """Get storage usage stats for the Nipogi mount."""
+    if not _storage_available():
+        raise HTTPException(status_code=503, detail="Stockage Nipogi non disponible")
+
+    # Try to get filesystem stats for the mount point
+    try:
+        stat = os.statvfs(str(STORAGE_DIR))
+        total = stat.f_blocks * stat.f_frsize
+        free = stat.f_bavail * stat.f_frsize
+        used = total - free
+    except Exception:
+        total = free = used = 0
+
+    # Per-subfolder usage
+    subfolders = {}
+    for name, path in [("uploads", STORAGE_UPLOADS), ("documents", STORAGE_DOCUMENTS),
+                       ("backups", STORAGE_BACKUPS), ("archives", STORAGE_ARCHIVES)]:
+        size = 0
+        count = 0
+        if path.is_dir():
+            for f in path.rglob("*"):
+                if f.is_file():
+                    size += f.stat().st_size
+                    count += 1
+        subfolders[name] = {"taille": size, "nb_fichiers": count}
+
+    total_used = sum(s["taille"] for s in subfolders.values())
+
+    return {
+        "available": _storage_available(),
+        "total_bytes": total,
+        "free_bytes": free,
+        "used_bytes": used,
+        "crm_storage_bytes": total_used,
+        "subfolders": subfolders,
+    }
+
+
+# ============ F5-AG: GENERATEUR DOCUMENTS ASSEMBLEE GENERALE ============
+
+ASSO_NAME = "Les Ami(e)s de Romy"
+ASSO_SIEGE = "558 avenue du Vieux Mas, 13600 La Ciotat"
+
+def _ag_auth(token: str):
+    """Auth via token query param (for window.open)."""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Token invalide")
+    if user["role"] not in REFERENT_ROLES:
+        raise HTTPException(status_code=403, detail="Acces referent requis")
+    return user
+
+def _ag_periode() -> str:
+    """Retourne l'année associative (ex: '2025-2026'). Septembre→août."""
+    now = datetime.now()
+    if now.month >= 9:
+        return f"{now.year}-{now.year + 1}"
+    return f"{now.year - 1}-{now.year}"
+
+
+def _ag_html_wrapper(title: str, body: str, user: dict, pdf_filename: str = "") -> str:
+    """HTML wrapper with shared print-friendly CSS for AG documents.
+
+    pdf_filename: nom propre du document (sans extension) qui devient document.title
+    → c'est ce nom que le navigateur propose quand l'utilisateur fait « Enregistrer en PDF ».
+    """
+    pdf_name = pdf_filename or title
+    return f"""<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>{pdf_name}</title>
+<style>
+body{{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:2rem;color:#333}}
+h1{{color:#0a335c;text-align:center;border-bottom:3px solid #0a335c;padding-bottom:.5rem}}
+h2{{color:#0a335c;margin-top:2rem;border-left:4px solid #6c9186;padding-left:.5rem}}
+.asso{{text-align:center;color:#666;font-size:.9rem;margin-bottom:.5rem}}
+.stat-box{{display:inline-block;width:45%;margin:1%;padding:1rem;background:#e8edf2;border-radius:10px;text-align:center}}
+.stat-box .num{{font-size:2rem;font-weight:bold;color:#0a335c}}
+.stat-box .lbl{{font-size:.85rem;color:#666}}
+table{{width:100%;border-collapse:collapse;margin:1rem 0}}
+th{{background:#0a335c;color:#fff;padding:.5rem;text-align:left}}
+td{{padding:.5rem;border-bottom:1px solid #eee}}
+tr:nth-child(even){{background:#f9f9f9}}
+.checkbox{{width:20px;height:20px;border:2px solid #0a335c;display:inline-block;margin-right:.5rem;border-radius:3px}}
+.signature{{margin-top:3rem;display:flex;justify-content:space-between}}
+.signature div{{border-top:1px solid #333;padding-top:.3rem;width:40%;text-align:center;font-size:.85rem}}
+.btn-print{{position:fixed;top:1rem;right:1rem;background:#0a335c;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:1rem;z-index:999}}
+.btn-print:hover{{background:#072645}}
+.btn-pdf{{position:fixed;top:1rem;right:7.5rem;background:#6c9186;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:1rem;z-index:999}}
+.btn-pdf:hover{{background:#5a7d72}}
+.footer{{margin-top:3rem;text-align:center;font-size:.8rem;color:#999}}
+@media print{{.btn-print,.btn-pdf{{display:none}}}}
+</style></head><body>
+<button class="btn-pdf" onclick="downloadPDF()">&#128190; T&eacute;l&eacute;charger PDF</button>
+<button class="btn-print" onclick="window.print()">&#128424; Imprimer</button>
+<div class="asso">{ASSO_NAME} &mdash; Pr&eacute;vention des violences infantiles<br>{ASSO_SIEGE}</div>
+{body}
+<div class="footer">G&eacute;n&eacute;r&eacute; le {datetime.now().strftime("%d/%m/%Y")} par {user["username"]} — CRM v{VERSION}</div>
+<script>
+document.title = "{pdf_name}";
+function downloadPDF() {{
+  document.title = "{pdf_name}";
+  window.print();
+}}
+</script>
+</body></html>"""
+
+@app.get("/api/ag/convocation")
+async def ag_convocation(date_ag: str = "", lieu: str = "", ordre_du_jour: str = "", token: str = ""):
+    """Génère une convocation d'AG en HTML."""
+    user = _ag_auth(token)
+    data = load_db()
+    date_fmt = date_ag or "Date à définir"
+    lieu_fmt = lieu or "Lieu à définir"
+    odj_items = [l.strip() for l in ordre_du_jour.split("\n") if l.strip()] if ordre_du_jour else [
+        "Ouverture de la séance",
+        "Approbation du PV de la précédente AG",
+        "Rapport moral",
+        "Rapport financier",
+        "Bilan d'activité",
+        "Renouvellement du bureau",
+        "Questions diverses",
+    ]
+    odj_html = "<ol>"
+    for item in odj_items:
+        odj_html += f"<li>{item}</li>"
+    odj_html += "</ol>"
+
+    # Count members à jour de cotisation
+    contacts = data.get("contacts", [])
+    cots = data.get("cotisations", [])
+    annee_courante = str(datetime.now().year)
+    ids_a_jour = {c.get("contact_id") for c in cots if c.get("annee") == annee_courante and c.get("statut") == "paye"}
+    nb_a_jour = sum(1 for c in contacts if c["id"] in ids_a_jour)
+
+    body = f"""
+<h1>Convocation à l'Assemblée Générale</h1>
+<p style="text-align:center;margin:1rem 0;font-size:1.1rem">Les membres de l'association <strong>{ASSO_NAME}</strong> sont convoqués à l'Assemblée Générale qui se tiendra :</p>
+<table style="width:100%;margin:1.5rem 0">
+<tr><th style="width:30%">Date</th><td>{date_fmt}</td></tr>
+<tr><th>Lieu</th><td>{lieu_fmt}</td></tr>
+<tr><th>Nombre de membres à jour de cotisation</th><td>{nb_a_jour}</td></tr>
+</table>
+<h2>Ordre du jour</h2>
+{odj_html}
+<p style="margin:1.5rem 0">Conformément aux statuts, tous les membres à jour de leur cotisation sont invités à participer. Les pouvoirs pour représentation doivent être donnés par écrit.</p>
+<h2>Convocation</h2>
+<p>La présente convocation est adressée à l'ensemble des {len(contacts)} contacts enregistrés, dont {nb_a_jour} membres à jour de cotisation pour l'année {annee_courante}.</p>
+<div class="signature">
+<div>Le Président / La Présidente</div>
+<div>Le Secrétaire / La Secrétaire</div>
+</div>
+"""
+    periode = _ag_periode()
+    return HTMLResponse(content=_ag_html_wrapper("Convocation AG", body, user, f"Convocation_AG_{periode}"))
+
+
+@app.get("/api/ag/feuille-presence")
+async def ag_feuille_presence(token: str = ""):
+    """Génère une feuille de présence d'AG en HTML — liste des adhérents à jour de cotisation."""
+    user = _ag_auth(token)
+    data = load_db()
+    contacts = data.get("contacts", [])
+    cots = data.get("cotisations", [])
+    annee_courante = str(datetime.now().year)
+
+    # Map contact_id → cotisation status for current year
+    cot_by_id = {}
+    for c in cots:
+        if c.get("annee") == annee_courante:
+            cot_by_id[c.get("contact_id")] = c
+
+    rows = ""
+    nb_a_jour = 0
+    nb_non_a_jour = 0
+    for c in contacts:
+        cot = cot_by_id.get(c["id"])
+        statut = cot.get("statut", "") if cot else "non cotisé"
+        a_jour = "✓" if statut == "paye" else "✗"
+        if statut == "paye":
+            nb_a_jour += 1
+        else:
+            nb_non_a_jour += 1
+        rows += f"<tr><td style='text-align:center'>{a_jour}</td><td>{c.get('prenom','')} {c.get('nom','')}</td><td>{c.get('qualite','')}</td><td>{c.get('email','')}</td><td style='text-align:center'>{statut}</td><td style='width:60px'>&nbsp;</td></tr>"
+
+    body = f"""
+<h1>Feuille de Présence — Assemblée Générale</h1>
+<p style="text-align:center;margin:1rem 0">Date: ____ / ____ / {annee_courante} &nbsp;&nbsp;&mdash;&nbsp;&nbsp; Lieu: ____________________________</p>
+<table>
+<tr><th>À jour</th><th>Nom Prénom</th><th>Qualité</th><th>Email</th><th>Cotisation {annee_courante}</th><th>Signature</th></tr>
+{rows}
+</table>
+<p style="margin-top:1rem"><strong>Membres à jour de cotisation: {nb_a_jour}</strong> / {len(contacts)} contacts enregistrés ({nb_non_a_jour} non à jour)</p>
+<div class="signature">
+<div>Le Secrétaire / La Secrétaire</div>
+<div>Le Président / La Présidente</div>
+</div>
+"""
+    periode = _ag_periode()
+    return HTMLResponse(content=_ag_html_wrapper("Feuille de présence AG", body, user, f"Feuille_Presence_AG_{periode}"))
+
+
+@app.get("/api/ag/rapport-moral")
+async def ag_rapport_moral(token: str = ""):
+    """Génère un rapport moral en HTML — basé sur les activités de l'association."""
+    user = _ag_auth(token)
+    data = load_db()
+    contacts = data.get("contacts", [])
+    events = data.get("evenements", [])
+    accomps = data.get("accompagnements", [])
+    cots = data.get("cotisations", [])
+    dons = data.get("dons", [])
+    annee = str(datetime.now().year)
+
+    events_an = [e for e in events if e.get("date", "").startswith(annee)]
+    accomps_an = [a for a in accomps if a.get("date_debut", "").startswith(annee)]
+    cots_an = [c for c in cots if c.get("annee") == annee]
+    dons_an = [d for d in dons if d.get("date", "").startswith(annee)]
+    nb_a_jour = sum(1 for c in cots_an if c.get("statut") == "paye")
+
+    body = f"""
+<h1>Rapport Moral — {annee}</h1>
+<p style="text-align:center;font-style:italic;margin:1rem 0">Présenté à l'Assemblée Générale par le Bureau de l'association {ASSO_NAME}</p>
+
+<h2>Introduction</h2>
+<p>L'association {ASSO_NAME}, dont le siège social est situé {ASSO_SIEGE}, a poursuivi en {annee} sa mission de prévention des violences infantiles. Ce rapport moral retrace les principales actions menées et les résultats obtenus.</p>
+
+<h2>Vie associative</h2>
+<p>Au cours de l'année {annee}, l'association compte <strong>{len(contacts)} contacts</strong> enregistrés, dont <strong>{nb_a_jour} membres à jour de cotisation</strong>. La vie associative s'est articulée autour des événements, des accompagnements et des actions de sensibilisation.</p>
+
+<h2>Actions menées</h2>
+<p><strong>{len(events_an)} événements</strong> ont été organisés en {annee} :</p>
+<table>
+<tr><th>Date</th><th>Titre</th><th>Lieu</th></tr>"""
+    for e in events_an:
+        body += f"<tr><td>{e.get('date','')}</td><td>{e.get('titre','')}</td><td>{e.get('lieu','')}</td></tr>"
+    if not events_an:
+        body += "<tr><td colspan='3' style='text-align:center;color:#999'>Aucun événement enregistré</td></tr>"
+    body += f"""</table>
+
+<h2>Accompagnements</h2>
+<p><strong>{len(accomps_an)} accompagnements</strong> ont été suivis en {annee}.</p>
+
+<h2>Ressources et financement</h2>
+<p>Les ressources de l'association proviennent des cotisations ({nb_a_jour} cotisations payées pour {annee}) et des dons ({len(dons_an)} dons reçus). Ces ressources ont permis de financer les actions décrites ci-dessus.</p>
+
+<h2>Perspectives</h2>
+<p>L'association poursuit ses actions de prévention et de sensibilisation. Les perspectives pour l'année à venir concernent le développement de nouveaux partenariats, l'élargissement du réseau de bénévoles et le renforcement des actions d'accompagnement.</p>
+
+<h2>Conclusion</h2>
+<p>Le Bureau remercie l'ensemble des membres, bénévoles et partenaires pour leur engagement et leur soutien tout au long de l'année {annee}.</p>
+<div class="signature">
+<div>Le Président / La Présidente</div>
+<div>Le Secrétaire / La Secrétaire</div>
+</div>
+"""
+    return HTMLResponse(content=_ag_html_wrapper("Rapport Moral AG", body, user, f"Rapport_Moral_AG_{annee}"))
+
+
+@app.get("/api/ag/rapport-financier")
+async def ag_rapport_financier(token: str = ""):
+    """Génère un rapport financier simplifié en HTML — depuis /api/stats + /api/dashboard."""
+    user = _ag_auth(token)
+    data = load_db()
+    contacts = data.get("contacts", [])
+    cots = data.get("cotisations", [])
+    dons = data.get("dons", [])
+    notes_frais = data.get("notes_frais", [])
+    annee = str(datetime.now().year)
+
+    cots_an = [c for c in cots if c.get("annee") == annee]
+    dons_an = [d for d in dons if d.get("date", "").startswith(annee)]
+    notes_an = [n for n in notes_frais if n.get("date", "").startswith(annee)]
+
+    total_cots = sum(c.get("montant", 0) for c in cots_an if c.get("statut") == "paye")
+    total_dons = sum(d.get("montant", 0) for d in dons_an)
+    total_frais = sum(n.get("montant", 0) for n in notes_an)
+    solde = total_cots + total_dons - total_frais
+
+    # Cotisations par statut
+    cots_payees = sum(1 for c in cots_an if c.get("statut") == "paye")
+    cots_attente = sum(1 for c in cots_an if c.get("statut") == "en_attente")
+    cots_impayees = sum(1 for c in cots_an if c.get("statut") == "impaye")
+
+    body = f"""
+<h1>Rapport Financier — {annee}</h1>
+<p style="text-align:center;font-style:italic;margin:1rem 0">Présenté à l'Assemblée Générale par le Trésorier / La Trésorière</p>
+
+<h2>Bilan simplifié</h2>
+<div class="stat-box"><div class="num">{total_cots:.0f} €</div><div class="lbl">Cotisations perçues</div></div>
+<div class="stat-box"><div class="num">{total_dons:.0f} €</div><div class="lbl">Dons reçus</div></div>
+<div class="stat-box"><div class="num">{total_frais:.0f} €</div><div class="lbl">Notes de frais</div></div>
+<div class="stat-box"><div class="num">{solde:.0f} €</div><div class="lbl">Solde (produits - charges)</div></div>
+
+<h2>Détail des cotisations {annee}</h2>
+<table>
+<tr><th>Statut</th><th>Nombre</th><th>Montant</th></tr>
+<tr><td>Payées</td><td style="text-align:center">{cots_payees}</td><td>{total_cots:.0f} €</td></tr>
+<tr><td>En attente</td><td style="text-align:center">{cots_attente}</td><td>{sum(c.get('montant',0) for c in cots_an if c.get('statut')=='en_attente'):.0f} €</td></tr>
+<tr><td>Impayées</td><td style="text-align:center">{cots_impayees}</td><td>{sum(c.get('montant',0) for c in cots_an if c.get('statut')=='impaye'):.0f} €</td></tr>
+</table>
+
+<h2>Dons de l'année</h2>
+<table>
+<tr><th>Date</th><th>Nom</th><th>Montant</th></tr>"""
+    for d in dons_an:
+        body += f"<tr><td>{d.get('date','')}</td><td>{d.get('nom','')}</td><td>{d.get('montant',0):.0f} €</td></tr>"
+    if not dons_an:
+        body += "<tr><td colspan='3' style='text-align:center;color:#999'>Aucun don enregistré</td></tr>"
+    body += f"""</table>
+
+<h2>Notes de frais de l'année</h2>
+<table>
+<tr><th>Date</th><th>Catégorie</th><th>Montant</th><th>Statut</th></tr>"""
+    for n in notes_an:
+        body += f"<tr><td>{n.get('date','')}</td><td>{n.get('categorie','')}</td><td>{n.get('montant',0):.0f} €</td><td>{n.get('statut','')}</td></tr>"
+    if not notes_an:
+        body += "<tr><td colspan='4' style='text-align:center;color:#999'>Aucune note de frais</td></tr>"
+    body += f"""</table>
+
+<h2>Synthèse</h2>
+<table>
+<tr><th>Produits</th><th>Charges</th><th>Solde</th></tr>
+<tr><td style="text-align:center">{(total_cots + total_dons):.0f} €</td><td style="text-align:center">{total_frais:.0f} €</td><td style="text-align:center;font-weight:bold">{solde:.0f} €</td></tr>
+</table>
+<div class="signature">
+<div>Le Trésorier / La Trésorière</div>
+<div>Le Président / La Présidente</div>
+</div>
+"""
+    return HTMLResponse(content=_ag_html_wrapper("Rapport Financier AG", body, user, f"Rapport_Financier_AG_{annee}"))
+
+
+@app.get("/api/ag/bilan-activite")
+async def ag_bilan_activite(token: str = "", annee: str = ""):
+    """Génère un bilan d'activité en HTML — depuis événements et accompagnements."""
+    user = _ag_auth(token)
+    data = load_db()
+    annee_cible = annee or str(datetime.now().year)
+    events = data.get("evenements", [])
+    accomps = data.get("accompagnements", [])
+
+    events_an = [e for e in events if e.get("date", "").startswith(annee_cible)]
+    accomps_an = [a for a in accomps if a.get("date_debut", "").startswith(annee_cible)]
+
+    # Stats de présence
+    presence_total = sum(sum(1 for v in e.get("presence", {}).values() if v == "present") for e in events_an)
+
+    body = f"""
+<h1>Bilan d'Activité — {annee_cible}</h1>
+<p style="text-align:center;font-style:italic;margin:1rem 0">Présenté à l'Assemblée Générale</p>
+
+<h2>Chiffres clés</h2>
+<div class="stat-box"><div class="num">{len(events_an)}</div><div class="lbl">Événements organisés</div></div>
+<div class="stat-box"><div class="num">{presence_total}</div><div class="lbl">Présences totales</div></div>
+<div class="stat-box"><div class="num">{len(accomps_an)}</div><div class="lbl">Accompagnements</div></div>
+
+<h2>Événements de l'année</h2>
+<table>
+<tr><th>Date</th><th>Titre</th><th>Lieu</th><th>Présences</th></tr>"""
+    for e in events_an:
+        pres = sum(1 for v in e.get("presence", {}).values() if v == "present")
+        body += f"<tr><td>{e.get('date','')}</td><td>{e.get('titre','')}</td><td>{e.get('lieu','')}</td><td style='text-align:center'>{pres}</td></tr>"
+    if not events_an:
+        body += "<tr><td colspan='4' style='text-align:center;color:#999'>Aucun événement</td></tr>"
+    body += f"""</table>
+
+<h2>Accompagnements de l'année</h2>
+<table>
+<tr><th>Type</th><th>Statut</th><th>Priorité</th></tr>"""
+    for a in accomps_an:
+        body += f"<tr><td>{a.get('type_suivi','')}</td><td>{a.get('statut','')}</td><td>{a.get('priorite','')}</td></tr>"
+    if not accomps_an:
+        body += "<tr><td colspan='3' style='text-align:center;color:#999'>Aucun accompagnement</td></tr>"
+    body += f"""</table>
+
+<h2>Conclusion</h2>
+<p>En {annee_cible}, l'association a organisé {len(events_an)} événements pour un total de {presence_total} présences, et a suivi {len(accomps_an)} accompagnements. L'engagement des bénévoles et la qualité des actions menées restent au cœur de la mission de prévention des violences infantiles.</p>
+<div class="signature">
+<div>Le Président / La Présidente</div>
+<div>Le Secrétaire / La Secrétaire</div>
+</div>
+"""
+    return HTMLResponse(content=_ag_html_wrapper("Bilan d'Activité AG", body, user, f"Bilan_Activite_AG_{annee_cible}"))
+
+
+@app.get("/api/ag/bulletin-vote")
+async def ag_bulletin_vote(titre: str = "", description: str = "", token: str = ""):
+    """Génère un bulletin de vote en HTML pour une résolution."""
+    user = _ag_auth(token)
+    titre_res = titre or "Résolution à voter"
+    desc = description or ""
+
+    body = f"""
+<h1>Bulletin de Vote</h1>
+<p style="text-align:center;font-style:italic;margin:1rem 0">Assemblée Générale — {ASSO_NAME}</p>
+
+<h2>Résolution</h2>
+<p style="font-size:1.1rem;font-weight:bold;margin:1rem 0">{titre_res}</p>
+{"<p>" + desc.replace(chr(10), "<br>") + "</p>" if desc else ""}
+
+<h2>Vote</h2>
+<p style="margin:1rem 0">Cochez une seule case :</p>
+<table style="width:100%;border:2px solid #0a335c">
+<tr><td style="padding:1rem;font-size:1.2rem"><span class="checkbox"></span> POUR</td></tr>
+<tr><td style="padding:1rem;font-size:1.2rem"><span class="checkbox"></span> CONTRE</td></tr>
+<tr><td style="padding:1rem;font-size:1.2rem"><span class="checkbox"></span> ABSTENTION</td></tr>
+</table>
+
+<p style="margin:1.5rem 0">Nom: _________________________________</p>
+<p style="margin:.5rem 0">Prénom: _________________________________</p>
+<p style="margin:.5rem 0">Signature:</p>
+<p style="margin-top:2rem">_____________________________________</p>
+<div class="footer" style="margin-top:3rem">Bulletin confidentiel — CRM v{VERSION}</div>
+"""
+    periode = _ag_periode()
+    return HTMLResponse(content=_ag_html_wrapper("Bulletin de Vote", body, user, f"Bulletin_Vote_AG_{periode}"))
+
+
+@app.get("/api/ag/pv")
+async def ag_pv(date_ag: str = "", lieu: str = "", token: str = ""):
+    """Génère un Procès-Verbal complet d'AG en HTML."""
+    user = _ag_auth(token)
+    data = load_db()
+    contacts = data.get("contacts", [])
+    cots = data.get("cotisations", [])
+    votes = data.get("votes", [])
+    annee = str(datetime.now().year)
+
+    date_fmt = date_ag or datetime.now().strftime("%d/%m/%Y")
+    lieu_fmt = lieu or ASSO_SIEGE
+
+    # Members à jour
+    cot_by_id = {}
+    for c in cots:
+        if c.get("annee") == annee:
+            cot_by_id[c.get("contact_id")] = c
+    presents_html = ""
+    nb_a_jour = 0
+    for c in contacts:
+        cot = cot_by_id.get(c["id"])
+        a_jour = cot and cot.get("statut") == "paye"
+        if a_jour:
+            nb_a_jour += 1
+            presents_html += f"<tr><td style='text-align:center'>&#9745;</td><td>{c.get('prenom','')} {c.get('nom','')}</td><td>{c.get('qualite','')}</td></tr>"
+
+    # Votes (scrutins)
+    votes_html = ""
+    for v in votes:
+        r = v.get("resultat", {})
+        pour = r.get("pour", 0)
+        contre = r.get("contre", 0)
+        abstention = r.get("abstention", 0)
+        statut = v.get("statut", "ouvert")
+        votes_html += f"<tr><td>{v.get('titre','')}</td><td>{v.get('type_vote','')}</td><td style='text-align:center'>{pour}</td><td style='text-align:center'>{contre}</td><td style='text-align:center'>{abstention}</td><td style='text-align:center'>{statut}</td></tr>"
+    if not votes:
+        votes_html = "<tr><td colspan='6' style='text-align:center;color:#999'>Aucun vote enregistré</td></tr>"
+
+    body = f"""
+<h1>Procès-Verbal de l'Assemblée Générale</h1>
+<p style="text-align:center;font-style:italic;margin:1rem 0">{ASSO_NAME} — {ASSO_SIEGE}</p>
+<table style="width:100%;margin:1rem 0">
+<tr><th style="width:30%">Date</th><td>{date_fmt}</td></tr>
+<tr><th>Lieu</th><td>{lieu_fmt}</td></tr>
+<tr><th>Heure d'ouverture</th><td>____ h ____</td></tr>
+<tr><th>Heure de clôture</th><td>____ h ____</td></tr>
+<tr><th>Nombre de membres à jour de cotisation</th><td>{nb_a_jour}</td></tr>
+<tr><th>Nombre de présents</th><td>____ (à remplir)</td></tr>
+<tr><th>Nombre de pouvoirs</th><td>____</td></tr>
+</table>
+
+<h2>1. Ouverture de la séance</h2>
+<p>L'Assemblée Générale s'est réunie le {date_fmt} à {lieu_fmt}. La séance a été ouverte par le Président / La Présidente.</p>
+
+<h2>2. Présents</h2>
+<table>
+<tr><th>Présent</th><th>Nom Prénom</th><th>Qualité</th></tr>
+{presents_html}
+</table>
+
+<h2>3. Approbation du PV de la précédente AG</h2>
+<p>Le procès-verbal de la précédente Assemblée Générale est lu et approuvé à l'unanimité / à la majorité (rayer la mention inutile).</p>
+
+<h2>4. Rapport moral</h2>
+<p>Le rapport moral est présenté par le Président / La Présidente. Il est approuvé par l'Assemblée.</p>
+
+<h2>5. Rapport financier</h2>
+<p>Le rapport financier est présenté par le Trésorier / La Trésorière. Il est approuvé par l'Assemblée.</p>
+
+<h2>6. Bilan d'activité</h2>
+<p>Le bilan d'activité est présenté. Les actions menées au cours de l'année sont exposées et discutées.</p>
+
+<h2>7. Délibérations et votes</h2>
+<table>
+<tr><th>Résolution</th><th>Type</th><th>Pour</th><th>Contre</th><th>Abstention</th><th>Statut</th></tr>
+{votes_html}
+</table>
+
+<h2>8. Questions diverses</h2>
+<p>Diverses questions ont été abordées par les membres présents.</p>
+
+<h2>9. Clôture de la séance</h2>
+<p>La séance est levée à ____ h ____.</p>
+
+<div class="signature">
+<div>Le Président / La Présidente</div>
+<div>Le Secrétaire / La Secrétaire</div>
+</div>
+"""
+    periode = _ag_periode()
+    return HTMLResponse(content=_ag_html_wrapper("Procès-Verbal AG", body, user, f"Proces-Verbal_AG_{periode}"))
+
+
+@app.get("/api/ag/checklist")
+async def ag_checklist(token: str = ""):
+    """Génère une checklist pré-AG basée sur les chiffres réels du CRM pour l'année écoulée (septembre à août)."""
+    user = _ag_auth(token)
+    data = load_db()
+
+    # Année associative : septembre N-1 à août N
+    # Exemple : en août 2026, l'année écoulée = sept 2025 à août 2026
+    # En septembre 2026, l'année écoulée = sept 2025 à août 2026 aussi
+    now = datetime.now()
+    if now.month >= 9:
+        annee_debut = now.year
+        annee_fin = now.year + 1
+    else:
+        annee_debut = now.year - 1
+        annee_fin = now.year
+    periode = f"{annee_debut}-{annee_fin}"
+    date_debut = f"{annee_debut}-09-01"
+    date_fin = f"{annee_fin}-08-31"
+    annee_cot = str(annee_fin)  # année cotisation = année de fin
+
+    contacts = data.get("contacts", [])
+    cots = data.get("cotisations", [])
+    events = data.get("evenements", [])
+    dons = data.get("dons", [])
+    notes_frais = data.get("notes_frais", [])
+    votes = data.get("votes", [])
+    accompagnements = data.get("accompagnements", [])
+    documents = data.get("documents", [])
+
+    # Chiffres réels de l'année écoulée
+    nb_contacts_total = len(contacts)
+    nb_cots_annee = len([c for c in cots if c.get("annee") == annee_cot])
+    nb_cots_payees = len([c for c in cots if c.get("annee") == annee_cot and c.get("statut") == "paye"])
+    nb_cots_impayees = len([c for c in cots if c.get("annee") == annee_cot and c.get("statut") != "paye"])
+    montant_cots = sum(c.get("montant", 0) for c in cots if c.get("annee") == annee_cot and c.get("statut") == "paye")
+
+    # Événements de l'année écoulée
+    events_annee = [e for e in events if date_debut <= e.get("date", "") <= date_fin]
+    nb_events = len(events_annee)
+    events_a_venir = [e for e in events if e.get("date", "") >= now.strftime("%Y-%m-%d")]
+
+    # Interventions de sensibilisation
+    interventions = [e for e in events_annee if e.get("type", "") == "intervention"]
+    nb_interventions = len(interventions)
+    nb_participants_total = sum(len(e.get("participants", [])) for e in interventions)
+
+    # Dons de l'année
+    dons_annee = [d for d in dons if date_debut <= d.get("date", "") <= date_fin]
+    nb_dons = len(dons_annee)
+    montant_dons = sum(d.get("montant", 0) for d in dons_annee)
+
+    # Notes de frais
+    frais_annee = [f for f in notes_frais if date_debut <= f.get("date", "") <= date_fin]
+    nb_frais = len(frais_annee)
+    montant_frais = sum(f.get("montant", 0) for f in frais_annee)
+
+    # Accompagnements actifs
+    accomp_actifs = [a for a in accompagnements if a.get("statut", "") == "actif"]
+
+    # Votes enregistrés
+    nb_votes = len(votes)
+
+    # Documents dans le CRM
+    nb_docs = len(documents)
+
+    # Items de la checklist avec chiffres réels
+    items = [
+        ("Définir la date et le lieu de l'AG", "Convocations", ""),
+        ("Réserver la salle", "Logistique", ""),
+        ("Préparer les convocations (courrier/email)", "Convocations", ""),
+        ("Envoyer les convocations (15 jours minimum avant l'AG)", "Convocations", ""),
+        (f"Vérifier les cotisations {annee_cot} : {nb_cots_payees} payées, {nb_cots_impayees} impayées sur {nb_cots_annee} attendues", "Adhésions", f"{nb_cots_payees}/{nb_contacts_total}"),
+        (f"Relancer les {nb_cots_impayees} adhérents en retard de cotisation", "Adhésions", f"{nb_cots_impayees} relances"),
+        (f"Préparer le rapport moral (exercice {periode})", "Documents", ""),
+        (f"Préparer le rapport financier : {montant_cots}€ cotisations + {montant_dons}€ dons + {montant_frais}€ frais", "Documents", f"{montant_cots + montant_dons}€ recettes"),
+        (f"Préparer le bilan d'activité : {nb_interventions} interventions, {nb_participants_total} participants", "Documents", f"{nb_interventions} interv."),
+        (f"Préparer le bilan salons/colloques : {nb_events - nb_interventions} événements autres", "Documents", ""),
+        ("Préparer les feuilles de présence (adhérents à jour)", "Documents", f"{nb_cots_payees} à jour"),
+        (f"Préparer les bulletins de vote : {nb_votes} résolution(s) enregistrée(s)", "Documents", f"{nb_votes} résolutions"),
+        ("Préparer le PV (modèle)", "Documents", ""),
+        ("Vérifier le matériel (urne, bulletins, procuration)", "Logistique", ""),
+        ("Préparer le powerpoint / support de présentation", "Logistique", ""),
+        ("Confirmer les intervenants (Président, Trésorier, Secrétaire)", "Organisation", ""),
+        (f"Rappeler la date aux {nb_cots_payees} membres à jour (J-2)", "Convocations", ""),
+        (f"Vérifier les {len(accomp_actifs)} accompagnements actifs à présenter", "Organisation", f"{len(accomp_actifs)} actifs"),
+        (f"Archiver les {nb_docs} documents du CRM pour l'exercice", "Clôture", f"{nb_docs} docs"),
+        ("Clôturer l'exercice comptable dans le CRM", "Clôture", ""),
+    ]
+
+    rows = ""
+    for i, (item, cat, chiffre) in enumerate(items, 1):
+        chiffre_html = f"<span style='background:#e8edf2;color:#0a335c;padding:2px 8px;border-radius:10px;font-size:.8rem;font-weight:600'>{chiffre}</span>" if chiffre else ""
+        rows += f"<tr><td style='text-align:center'><span class='checkbox'></span></td><td style='text-align:center;font-weight:600'>{i}</td><td>{item}</td><td style='text-align:center'>{cat}</td><td style='text-align:center'>{chiffre_html}</td></tr>"
+
+    # Tableau récapitulatif des chiffres de l'année
+    recap_rows = ""
+    recap_data = [
+        ("Période de l'exercice", periode),
+        ("Total contacts", str(nb_contacts_total)),
+        ("Cotisations payées", f"{nb_cots_payees} ({montant_cots}€)"),
+        ("Cotisations impayées", f"{nb_cots_impayees}"),
+        ("Dons perçus", f"{nb_dons} ({montant_dons}€)"),
+        ("Notes de frais", f"{nb_frais} ({montant_frais}€)"),
+        ("Interventions de sensibilisation", f"{nb_interventions}"),
+        ("Participants touchés", f"{nb_participants_total}"),
+        ("Événements totaux", f"{nb_events}"),
+        ("Accompagnements actifs", f"{len(accomp_actifs)}"),
+        ("Votes enregistrés", f"{nb_votes}"),
+        ("Documents dans le CRM", f"{nb_docs}"),
+    ]
+    for label, valeur in recap_data:
+        recap_rows += f"<tr><td style='padding:8px;border:1px solid #ddd'>{label}</td><td style='padding:8px;border:1px solid #ddd;font-weight:600;color:#0a335c;text-align:right'>{valeur}</td></tr>"
+
+    body = f"""
+<h1>Checklist pré-Assemblée Générale — Exercice {periode}</h1>
+<p style="text-align:center;font-style:italic;margin:1rem 0">{ASSO_NAME}</p>
+
+<div style="background:#e8edf2;border-radius:12px;padding:1rem 1.5rem;margin:1.5rem 0">
+<h2 style="color:#0a335c;margin-top:0">Récapitulatif de l'année écoulée ({periode})</h2>
+<table style="width:100%;border-collapse:collapse">
+{recap_rows}
+</table>
+</div>
+
+<h2>Checklist de préparation</h2>
+<table>
+<tr><th>Fait</th><th>N°</th><th>Tâche</th><th>Catégorie</th><th>Chiffre clé</th></tr>
+{rows}
+</table>
+
+<h2>Événements à venir</h2>
+<table>
+<tr><th>Date</th><th>Titre</th><th>Lieu</th></tr>"""
+    for e in events_a_venir[:5]:
+        body += f"<tr><td>{e.get('date','')}</td><td>{e.get('titre','')}</td><td>{e.get('lieu','')}</td></tr>"
+    if not events_a_venir:
+        body += "<tr><td colspan='3' style='text-align:center;color:#999'>Aucun événement à venir</td></tr>"
+    body += """
+</table>
+<p style="margin-top:2rem;font-size:.9rem;color:#666">Cochez chaque élément au fur et à mesure de sa réalisation. Les chiffres sont extraits automatiquement du CRM pour l'exercice """ + periode + """ (septembre à août).</p>
+"""
+    return HTMLResponse(content=_ag_html_wrapper("Checklist pré-AG", body, user, f"Checklist_pre-AG_{periode}"))
+
+
+# ============ SUBVENTIONS (v1.34) ============
+@app.get("/api/subventions")
+async def list_subventions(statut: str = "", user=Depends(require_referent)):
+    data = load_db()
+    subs = data.get("subventions", [])
+    if statut:
+        subs = [s for s in subs if s.get("statut") == statut]
+    return subs
+
+@app.post("/api/subventions")
+async def create_subvention(req: SubventionCreate, user=Depends(require_referent)):
+    data = load_db()
+    if "subventions" not in data:
+        data["subventions"] = []
+    sub = {
+        "id": f"sub-{secrets.token_hex(8)}",
+        "organisme": req.organisme,
+        "intitule": req.intitule,
+        "montant_demande": req.montant_demande,
+        "montant_accorde": req.montant_accorde,
+        "date_demande": req.date_demande,
+        "date_reponse": req.date_reponse,
+        "statut": req.statut,
+        "echeance": req.echeance,
+        "documents_requis": req.documents_requis,
+        "documents_remis": req.documents_remis,
+        "notes": req.notes,
+        "cree_par": user["username"],
+        "cree_le": now_iso()
+    }
+    data["subventions"].append(sub)
+    save_db(data)
+    backup_db()
+    return {"status": "ok", "subvention": sub}
+
+@app.put("/api/subventions/{sub_id}")
+async def update_subvention(sub_id: str, req: SubventionUpdate, user=Depends(require_referent)):
+    data = load_db()
+    for s in data.get("subventions", []):
+        if s["id"] == sub_id:
+            if req.organisme is not None: s["organisme"] = req.organisme
+            if req.intitule is not None: s["intitule"] = req.intitule
+            if req.montant_demande is not None: s["montant_demande"] = req.montant_demande
+            if req.montant_accorde is not None: s["montant_accorde"] = req.montant_accorde
+            if req.date_demande is not None: s["date_demande"] = req.date_demande
+            if req.date_reponse is not None: s["date_reponse"] = req.date_reponse
+            if req.statut is not None: s["statut"] = req.statut
+            if req.echeance is not None: s["echeance"] = req.echeance
+            if req.documents_requis is not None: s["documents_requis"] = req.documents_requis
+            if req.documents_remis is not None: s["documents_remis"] = req.documents_remis
+            if req.notes is not None: s["notes"] = req.notes
+            save_db(data); backup_db()
+            return {"status": "ok", "subvention": s}
+    raise HTTPException(status_code=404, detail="Subvention non trouvee")
+
+@app.delete("/api/subventions/{sub_id}")
+async def delete_subvention(sub_id: str, user=Depends(require_referent)):
+    data = load_db()
+    data["subventions"] = [s for s in data.get("subventions", []) if s["id"] != sub_id]
+    save_db(data); backup_db()
+    return {"status": "ok"}
+
+@app.get("/api/subventions/total")
+async def total_subventions(user=Depends(require_referent)):
+    data = load_db()
+    subs = data.get("subventions", [])
+    return {
+        "total_demande": sum(s.get("montant_demande", 0) for s in subs),
+        "total_accorde": sum(s.get("montant_accorde", 0) for s in subs),
+        "brouillon": len([s for s in subs if s.get("statut") == "brouillon"]),
+        "depose": len([s for s in subs if s.get("statut") == "depose"]),
+        "accepte": len([s for s in subs if s.get("statut") == "accepte"]),
+        "refuse": len([s for s in subs if s.get("statut") == "refuse"]),
+        "count": len(subs)
+    }
 
 
 # ============ STARTUP ============
