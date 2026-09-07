@@ -3,15 +3,19 @@
 CRM association pour la prevention des violences infantiles.
 FastAPI + PWA mobile-first. Deploye en Docker sur mini-PC Nipogi AM06 (port 8001).
 
-## Version actuelle: v1.34
+## Version actuelle: v1.35
 
-- 24 onglets, **142 endpoints API**
-- Backend FastAPI (~5 137 lignes)
-- Frontend PWA (~5 413 lignes)
-- **Nouveautes v1.34** :
-  - OCR factures integre via Tesseract (fra+eng, local, sans Ollama) — extraction automatique des donnees de factures (montant, fournisseur, date, SIRET...)
-  - Module subventions (modeles v1.34)
-  - Deploiement Docker sur Nipogi (permissions uploads/backups/db.json corrigees)
+- 24 onglets, **146 endpoints API**
+- Backend FastAPI (~5 900 lignes)
+- Frontend PWA (~5 500 lignes)
+- **Nouveautés v1.35** :
+  - **Facturation du livre « Chut ! c'est un secret… »** : création de factures PDF A4 légales (logo en haut à gauche, mentions RNA/SIREN/adresse, TVA non applicable art. 261-1-4° CGI, modalités de règlement, pied de page légal complet)
+  - Catalogue 5 versions du livre avec prix officiels (illustré 14€, FALC 20€, LSF 28€, Braille 80€, table de communication 15€)
+  - Envoi automatique de la facture par email au client (optionnel)
+  - Suivi comptable des ventes par version (quantités + montants) dans `db.json` clé `ventes_livre`
+  - Stats en temps réel dans l'onglet dédié de la sidebar
+  - PWA complète : manifest + icônes 192/512 + logo haute résolution
+- **v1.34** : OCR factures via Tesseract (fra+eng), module subventions, déploiement Docker Nipogi
 
 ## Structure
 

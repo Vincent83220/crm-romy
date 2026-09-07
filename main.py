@@ -50,7 +50,7 @@ for _d in (STORAGE_DIR, STORAGE_UPLOADS, STORAGE_DOCUMENTS, STORAGE_BACKUPS, STO
     except OSError:
         pass  # mount not available — endpoints will report gracefully
 
-VERSION = "1.34"
+VERSION = "1.35"
 HOST = os.environ.get("CRM_HOST", "100.89.45.97")
 PORT = int(os.environ.get("CRM_PORT", "8001"))
 
@@ -5132,6 +5132,389 @@ async def startup():
     print(f"[CRM Romy] v{VERSION} demarre sur {HOST}:{PORT}")
     print(f"[CRM Romy] Base: {DB_PATH}")
     print(f"[CRM Romy] Contacts: {len(load_db().get('contacts', []))}")
+
+
+
+# ============================================================
+# FACTURATION LIVRE "Chut, c'est un secret !" (v1.35)
+# ============================================================
+
+from io import BytesIO
+from datetime import datetime, date
+
+# --- Configuration association (infos legales) ---
+ASSO_INFO = {
+    "nom": "Association Les Ami(e)s de Romy",
+    "rna": "W133038045",
+    "siren": "923 904 973",
+    "adresse": "18 avenue des Albizzi",
+    "cp_ville": "13600 La Ciotat",
+    "telephone": "06 95 46 79 42",
+    "email": "lesamiesderomy@ik.me",
+    "site": "https://lesamiesderomy.org",
+}
+
+# Catalogue officiel (source: lesamiesderomy.org)
+LIVRE_PRODUITS = {
+    "illustre":      {"libelle": "Livre illustré « Chut ! c'est un secret… » (+ version audio)", "prix": 14.0},
+    "falc":          {"libelle": "Version FALC (Facile à Lire et à Comprendre)", "prix": 20.0},
+    "lsf":           {"libelle": "Vidéo Langue des Signes Française", "prix": 28.0},
+    "braille":       {"libelle": "Version Braille / Audio", "prix": 80.0},
+    "table_comm":    {"libelle": "Table de communication", "prix": 15.0},
+}
+
+MENTIONS_LEGALES = (
+    "Association régie par la loi du 1er juillet 1901 — Association non assujettie à la TVA "
+    "(art. 261-1-4° du CGI), prix TTC. "
+    "Les bénéfices des ventes financent les suivis thérapeutiques et judiciaires des victimes "
+    "et de leurs familles."
+)
+
+
+def _ensure_ventes_livre(db):
+    if "ventes_livre" not in db:
+        db["ventes_livre"] = {"compteur": 0, "factures": {}, "ventes": []}
+    return db["ventes_livre"]
+
+
+def _next_facture_number(vl):
+    """Format: FAC-LIVRE-2026-001"""
+    vl["compteur"] = int(vl.get("compteur", 0)) + 1
+    year = date.today().year
+    return f"FAC-LIVRE-{year}-{vl['compteur']:03d}"
+
+
+def _build_facture_pdf(numero: str, client: dict, lignes: list, date_fact: str) -> bytes:
+    """Genere la facture PDF: logo en haut a gauche, mentions legales en pied de page."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfgen import canvas
+
+    buffer = BytesIO()
+    W, H = A4
+    c = canvas.Canvas(buffer, pagesize=A4)
+
+    MAGENTA = HexColor("#d03ec6")
+    BLEU_NUIT = HexColor("#0a335c")
+    GRIS = HexColor("#666666")
+    NOIR = HexColor("#1a1a1a")
+
+    # ---------- Logo en haut a GAUCHE ----------
+    logo_path = None
+    for p in [BASE_DIR / "static" / "romy_banner_new.png", BASE_DIR / "romy_banner.png"]:
+        if p.exists():
+            logo_path = str(p)
+            break
+    if logo_path:
+        try:
+            from reportlab.lib.utils import ImageReader
+            c.drawImage(ImageReader(logo_path), 15*mm, H - 45*mm, width=45*mm, height=30*mm,
+                        preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
+
+    # ---------- En-tete facture (a droite du logo) ----------
+    y = H - 25*mm
+    c.setFillColorRGB(.95, .24, .78)  # magenta asso
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(70*mm, y, "FACTURE")
+    y -= 8*mm
+    c.setFont("Helvetica", 10)
+    c.setFillColor(NOIR)
+    c.drawString(70*mm, y, f"N° {numero}")
+    y -= 5*mm
+    c.drawString(70*mm, y, f"Date : {date_fact}")
+
+    # Emetteur (sous le logo)
+    y_logo_txt = H - 48*mm
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(BLEU_NUIT)
+    c.drawString(15*mm, y_logo_txt, ASSO_INFO["nom"])
+    c.setFont("Helvetica", 8.5)
+    c.setFillColor(GRIS)
+    yy = y_logo_txt - 4.5*mm
+    for line in [
+        f"RNA : {ASSO_INFO['rna']} — SIREN : {ASSO_INFO['siren']}",
+        ASSO_INFO["adresse"],
+        ASSO_INFO["cp_ville"],
+        f"Tél : {ASSO_INFO['telephone']} — {ASSO_INFO['email']}",
+        ASSO_INFO["site"],
+    ]:
+        c.drawString(15*mm, yy := yy - 4*mm, line) if False else None
+        yy -= 4*mm
+        c.drawString(15*mm, yy, line)
+
+    # ---------- Client ----------
+    y_client = H - 55*mm
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(NOIR)
+    c.drawString(W - 85*mm, y_client, "FACTURER À :")
+    c.setFont("Helvetica", 9.5)
+    yy = y_client - 5.5*mm
+    c.drawString(W - 85*mm, yy, "".join(ch for ch in client.get("nom", "") if ch.isprintable()))
+    yy -= 4.5*mm
+    if client.get("adresse"):
+        for line in ("".join(ch for ch in client["adresse"] if ch.isprintable() or ch == chr(10))).splitlines():
+            c.drawString(W - 85*mm, yy, line)
+            yy -= 4*mm
+    if client.get("email"):
+        c.drawString(W - 85*mm, yy, client["email"])
+
+    # ---------- Tableau des lignes ----------
+    y_tab = H - 95*mm
+    col_x = [15*mm, 90*mm, 140*mm, 160*mm, W - 15*mm]
+    headers = ["Réf.", "Désignation", "Qté", "P.U. (€)", "Total (€)"]
+
+    c.setFillColor(BLEU_NUIT)
+    c.rect(15*mm, y_tab - 6*mm, W - 30*mm, 8*mm, fill=1, stroke=0)
+    c.setFillColor(HexColor("#ffffff"))
+    c.setFont("Helvetica-Bold", 9)
+    hx = [15*mm, 32*mm, 105*mm, 125*mm, 162*mm]
+    for h, x in zip(headers, hx):
+        c.drawString(x, y_tab - 4*mm, h)
+
+    y_line = y_tab - 12*mm
+    c.setFont("Helvetica", 8.5)
+    c.setFillColor(NOIR)
+
+    total = 0.0
+    from reportlab.lib.utils import simpleSplit
+    for i, l in enumerate(lignes):
+        produit = LIVRE_PRODUITS[l["version"]]
+        q = int(l.get("quantite", 1))
+        pu = float(produit["prix"])
+        st = q * pu
+        total += st
+        if i % 2 == 0:
+            c.setFillColor(HexColor("#faf5fc"))
+            c.rect(15*mm, y_line - 2*mm, W - 30*mm, 8*mm, fill=1, stroke=0)
+            c.setFillColor(NOIR)
+        ref = f"LB-{l['version'].upper()}"
+        c.drawString(16*mm, y_line, ref)
+        # Libelle: tronque a la largeur reelle de la colonne (80mm max)
+        c.setFont("Helvetica", 8.5)
+        label = produit["libelle"]
+        max_w = 82*mm
+        while c.stringWidth(label, "Helvetica", 8.5) > max_w and len(label) > 5:
+            label = label[:-2]
+        c.drawString(44*mm, y_line, label)
+        c.setFont("Helvetica", 9)
+        c.drawRightString(122*mm, y_line, str(q))
+        c.drawRightString(142*mm, y_line, f"{pu:.2f}")
+        c.drawRightString(W - 16*mm, y_line, f"{st:.2f}")
+        y_line -= 8*mm
+
+    # ---------- Totaux ----------
+    y_tot = y_line - 6*mm
+    c.setStrokeColor(GRIS)
+    c.setLineWidth(0.5)
+    c.line(120*mm, y_tot, W - 15*mm, y_tot)
+
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(BLEU_NUIT)
+    c.drawRightString(152*mm, y_tot - 7*mm, "TOTAL TTC :")
+    c.drawRightString(W - 16*mm, y_tot - 7*mm, f"{total:.2f} €")
+    c.setFont("Helvetica", 7.5)
+    c.setFillColor(GRIS)
+    c.drawRightString(W - 16*mm, y_tot - 12*mm,
+                      "Prix TTC — Association non assujettie à la TVA (art. 261-1-4° du CGI)")
+
+    # ---------- Modalites ----------
+    y_mod = y_tot - 22*mm
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(NOIR)
+    c.drawString(15*mm, y_mod, "Modalités de règlement")
+    c.setFont("Helvetica", 8.5)
+    c.setFillColor(GRIS)
+    c.drawString(15*mm, y_mod - 5*mm,
+                 f"Règlement par chèque à l'ordre de « {ASSO_INFO['nom']} », virement ou espèces.")
+    c.drawString(15*mm, y_mod - 9*mm,
+                 f"Contact : {ASSO_INFO['email']} — {ASSO_INFO['telephone']}")
+
+    # ---------- Pied de page: MENTIONS LEGALES ----------
+    c.setStrokeColor(GRIS)
+    c.setLineWidth(0.5)
+    c.line(15*mm, 25*mm, W - 15*mm, 25*mm)
+    c.setFont("Helvetica", 7)
+    c.setFillColor(GRIS)
+    footer_lines = [
+        f"{ASSO_INFO['nom']} — {ASSO_INFO['adresse']} — {ASSO_INFO['cp_ville']}",
+        f"RNA : {ASSO_INFO['rna']} — SIREN : {ASSO_INFO['siren']} — APE 8899B",
+        f"Tél : {ASSO_INFO['telephone']} — Email : {ASSO_INFO['email']} — {ASSO_INFO['site']}",
+        "Association régie par la loi du 1er juillet 1901 — TVA non applicable, art. 261-1-4° du CGI",
+        "Association d'intérêt général : les bénéfices des ventes financent les suivis thérapeutiques et judiciaires des victimes.",
+    ]
+    fy = 21*mm
+    for line in footer_lines:
+        c.drawCentredString(W/2, fy, line)
+        fy -= 4*mm
+
+    # Watermark discret
+    c.setFont("Helvetica-Oblique", 6.5)
+    c.setFillColor(HexColor("#dddddd"))
+    c.drawCentredString(W/2, 8*mm, f"Facture {numero} générée par le CRM des Ami(e)s de Romy — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ---------- Endpoints ----------
+
+@app.get("/api/ventes-livre/produits")
+async def vl_produits(user=Depends(require_auth)):
+    """Catalogue des versions du livre + prix officiels."""
+    return {"produits": LIVRE_PRODUITS}
+
+
+@app.get("/api/ventes-livre")
+async def vl_stats(user=Depends(require_auth)):
+    """Stats de ventes pour la compta + historique des factures."""
+    db = load_db()
+    vl = _ensure_ventes_livre(db)
+    ventes = vl.get("ventes", [])
+
+    stats_par_version = {}
+    total_qte = 0
+    total_montant = 0.0
+    for v in ventes:
+        ver = v["version"]
+        stats_par_version = stats_par_version.setdefault(ver, {"libelle": LIVRE_PRODUITS[ver]["libelle"], "quantite": 0, "montant": 0.0})
+        stats_par_version[ver]["quantite"] += int(v["quantite"])
+        stats_par_version[ver]["montant"] = round(stats_par_version[ver]["montant"] + float(v["montant"]), 2)
+        total_qte += int(v["quantite"])
+        total_montant += float(v["montant"])
+
+    return {
+        "stats_par_version": [
+            {"version": k, "libelle": v["libelle"], "quantite": v["quantite"], "montant": v["montant"]}
+            for k, v in stats_par_version.items()
+        ],
+        "total_quantite": total_qte,
+        "total_montant": round(total_montant, 2),
+        "nb_factures": len(vl.get("factures", {})),
+        "ventes": ventes[-100:],
+        "factures": sorted(vl.get("factures", {}).keys(), reverse=True),
+    }
+
+
+class VenteLivreRequest(BaseModel):
+    client_nom: str
+    client_email: str = ""
+    client_adresse: str = ""
+    lignes: list  # [{"version": "illustre", "quantite": 2}, ...]
+    paiement: str = "cheque"
+
+
+@app.post("/api/ventes-livre")
+async def vl_creer(req: VenteLivreRequest, user=Depends(require_referent)):
+    """Enregistre une vente (par version) et genere la facture PDF legale."""
+    if not req.lignes:
+        raise HTTPException(400, "Aucune ligne de vente")
+
+    # Validation des versions
+    for l in req.lignes:
+        if l.get("version") not in LIVRE_PRODUITS:
+            raise HTTPException(400, f"Version inconnue: {l.get('version')}")
+
+    db = load_db()
+    vl = _ensure_ventes_livre(db)
+    numero = _next_facture_number(vl)
+    date_fact = date.today().isoformat()
+
+    # Enregistrer les ventes ligne par ligne (suivi compta par version)
+    client = {"nom": req.client_nom, "adresse": req.client_adresse, "email": req.client_email}
+    for l in req.lignes:
+        produit = LIVRE_PRODUITS[l["version"]]
+        q = int(l.get("quantite", 1))
+        vl["ventes"].append({
+            "date": date_fact,
+            "facture": numero,
+            "client": req.client_nom,
+            "version": l["version"],
+            "libelle": produit["libelle"],
+            "quantite": q,
+            "prix_unitaire": produit["prix"],
+            "montant": round(q * produit["prix"], 2),
+            "paiement": req.paiement,
+        })
+
+    # Facture stockee en base64 (telechargeable via endpoint)
+    pdf_bytes = _build_facture_pdf(numero, client, req.lignes, date_fact)
+    import base64
+    vl["factures"][numero] = {
+        "date": date_fact,
+        "client": req.client_nom,
+        "email": req.client_email,
+        "total": round(sum(LIVRE_PRODUITS[l["version"]]["prix"] * int(l.get("quantite", 1)) for l in req.lignes), 2),
+        "lignes": req.lignes,
+        "pdf_b64": base64.b64encode(pdf_bytes).decode(),
+    }
+
+    save_db(db)
+
+    # Envoyer par email si email client fourni
+    email_sent = False
+    if req.client_email:
+        try:
+            import smtplib, ssl
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.application import MIMEApplication
+            from email.mime.text import MIMEText
+
+            smtp_cfg = json.loads(SMTP_PATH.read_text()) if SMTP_PATH.exists() else {}
+            if smtp_cfg.get("user"):
+                msg = MIMEMultipart()
+                msg["From"] = smtp_cfg["user"]
+                msg["To"] = req.client_email
+                msg["Subject"] = f"Facture {numero} — Les Ami(e)s de Romy"
+                msg.attach(MIMEText(
+                    f"Bonjour {req.client_nom},\\n\\n"
+                    f"Veuillez trouver ci-joint la facture {numero} pour votre achat du livre "
+                    f"« Chut ! c'est un secret… ».\\n\\n"
+                    f"Merci pour votre soutien ! Les bénéfices financent les suivis thérapeutiques "
+                    f"et judiciaires des victimes.\\n\\n"
+                    f"Les Ami(e)s de Romy", "plain", "utf-8"))
+                att = MIMEApplication(pdf_bytes, _subtype="pdf")
+                att.add_header("Content-Disposition", "attachment", filename=f"{numero}.pdf")
+                msg.attach(att)
+                ctx = ssl.create_default_context()
+                with smtplib.SMTP(smtp_cfg.get("host", "smtp.ik.me"), int(smtp_cfg.get("port", 587))) as s:
+                    s.starttls(context=ctx)
+                    s.login(smtp_cfg["user"], smtp_cfg["password"])
+                    s.send_message(msg)
+                email_sent = True
+        except Exception as e:
+            logger.warning(f"Envoi facture par email: {e}")
+
+    return {
+        "numero": numero,
+        "date": date_fact,
+        "total": vl["factures"][numero]["total"],
+        "pdf_base64": vl["factures"][numero]["pdf_b64"],
+        "email_envoye": email_sent,
+    }
+
+
+@app.get("/api/ventes-livre/facture/{numero}")
+async def vl_facture_pdf(numero: str, user=Depends(require_auth)):
+    """Telecharge une facture PDF (stockee)."""
+    db = load_db()
+    vl = _ensure_ventes_livre(db)
+    f = vl.get("factures", {}).get(numero)
+    if not f:
+        raise HTTPException(404, "Facture introuvable")
+    import base64
+    from fastapi.responses import Response
+    pdf = base64.b64decode(f["pdf_b64"])
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{numero}.pdf"'},
+    )
+
 
 if __name__ == "__main__":
     import uvicorn

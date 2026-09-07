@@ -294,6 +294,427 @@ nav button .nav-icon{font-size:1.4rem}
 .dash-bar-row .dbr-track{height:10px;background:var(--pink-light);border-radius:5px;overflow:hidden}
 .dash-bar-row .dbr-fill{height:100%;border-radius:5px;transition:width 1.2s ease-out}
 @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+
+/* ===== LAYOUT GLOBAL: body en flex row (sidebar + contenu) ===== */
+body {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ===== WRAPPER principal qui contient header+search+views+nav ===== */
+body > div:not(.modal-overlay):not(#toast) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ===== SIDEBAR: le <nav> devient colonne verticale fixe ===== */
+nav {
+  position: sticky !important;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 200px;
+  min-width: 200px;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-direction: column !important;
+  padding: 12px 10px !important;
+  gap: 2px;
+  border-top: none !important;
+  border-right: 1px solid var(--border) !important;
+  background: linear-gradient(180deg, var(--pink) 0%, var(--pink-dark) 100%) !important;
+  order: -1;
+}
+
+/* Boutons de nav: style vertical liste */
+nav button {
+  width: 100% !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  padding: 9px 12px !important;
+  border-radius: 8px !important;
+  color: rgba(255,255,255,.75) !important;
+  font-size: .82rem !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  transition: background .15s ease, color .15s ease !important;
+}
+nav button .nav-icon {
+  font-size: 1.05rem !important;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+nav button:hover {
+  background: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+}
+nav button.active {
+  background: rgba(255,255,255,.18) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  box-shadow: inset 3px 0 0 var(--rose);
+}
+
+/* Badge de notif dans la sidebar */
+nav .nav-badge {
+  position: static !important;
+  margin-left: auto !important;
+}
+
+/* Scrollbar de la sidebar: verticale fine overlay */
+nav::-webkit-scrollbar {
+  width: 6px;
+  display: block !important;
+}
+nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.25);
+  border-radius: 3px;
+}
+nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,.45);
+}
+nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.3) transparent;
+}
+
+/* ===== HEADER: reste en haut du contenu (pas full-width) ===== */
+header {
+  position: sticky !important;
+  border-radius: 0;
+}
+
+/* ===== VUES: padding moderne ===== */
+.view {
+  padding: 1.25rem 1.5rem !important;
+  padding-bottom: 2.5rem !important;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ===== SCROLLBAR VERTICALE du contenu principal (visible, moderne) ===== */
+body::-webkit-scrollbar,
+body > div::-webkit-scrollbar {
+  width: 12px;
+}
+body::-webkit-scrollbar-track,
+body > div::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+body::-webkit-scrollbar-thumb,
+body > div::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(10,51,92,.45), rgba(10,51,92,.25));
+  border-radius: 6px;
+  border: 2px solid var(--bg);
+  background-clip: padding-box;
+}
+body::-webkit-scrollbar-thumb:hover,
+body > div::-webkit-scrollbar-thumb:hover {
+  background: var(--pink);
+  border: 2px solid var(--bg);
+  background-clip: padding-box;
+}
+body, body > div {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(10,51,92,.4) var(--bg);
+}
+
+/* ===== POLISH SAAS ===== */
+
+/* Cards modernes */
+.card {
+  border-radius: 14px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04) !important;
+  border: 1px solid var(--border) !important;
+  transition: box-shadow .18s ease, transform .12s ease !important;
+}
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04) !important;
+}
+
+/* Boutons: transitions + active scale */
+button {
+  transition: all .15s cubic-bezier(.4,0,.2,1) !important;
+}
+button:active {
+  transform: scale(.98);
+}
+
+/* Inputs focus: ring moderne */
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgba(10,51,92,.10) !important;
+  border-color: var(--pink) !important;
+}
+
+/* Typography: titres de vues plus serrés */
+h1, h2, h3 {
+  letter-spacing: -.01em;
+}
+
+/* Header glassmorphism */
+header {
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+}
+
+/* ===== RESPONSIVE: mobile (< 900px) -> sidebar redevient drawer bas ===== */
+@media (max-width: 899px) {
+  body {
+    flex-direction: column;
+  }
+  nav {
+    position: fixed !important;
+    bottom: 0 !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: .3rem 0 !important;
+    border-right: none !important;
+    border-top: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    z-index: 100;
+  }
+  nav button {
+    width: auto !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 2px !important;
+    padding: .5rem .3rem !important;
+    font-size: .65rem !important;
+    color: var(--text-secondary) !important;
+    min-width: 64px !important;
+  }
+  nav button .nav-icon {
+    font-size: 1.4rem !important;
+    width: auto;
+  }
+  nav button.active {
+    color: var(--pink) !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  nav::-webkit-scrollbar {
+    display: none !important;
+  }
+  nav {
+    scrollbar-width: none;
+  }
+  .view {
+    padding: 1rem !important;
+    padding-bottom: 80px !important;
+  }
+}
+
+/* Theme sombre: sidebar reste sombre (deja sombre), scrollbar adaptée */
+[data-theme='dark'] body::-webkit-scrollbar-thumb,
+[data-theme='dark'] body > div::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.25);
+  border-color: var(--bg);
+}
+
+
+/* ============================================================
+   UI v4 — typo + avatars + cartes (palette originale conservée)
+   1. Palette chaude issue du logo
+   2. Typographie Manrope + chiffres degrade
+   3. Cartes contacts vivantes (avatars, hover, badges)
+   ============================================================ */
+
+/* ===== 1. PALETTE: conservation de la palette originale bleu nuit ===== */
+/* ===== 2. TYPOGRAPHIE MODERNE ===== */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+body {
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Titres: Manrope 700, serré */
+h1, h2, h3 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+/* Chiffres des stats: DEGRADE magenta -> rose (signature visuelle) */
+.stat-card .sc-num {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 2.2rem;
+  background: linear-gradient(135deg, #0a335c 0%, #2c6fb0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  letter-spacing: -.03em;
+}
+
+/* Libelles stats: petites capitales elegantes */
+.stat-card .sc-label {
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-secondary);
+}
+
+/* Stat-cards: petites cartes soignees */
+.stat-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(10,51,92,.12);
+}
+
+/* ===== 3. CARTES CONTACTS VIVANTES ===== */
+
+/* Grille plus aeree */
+.contacts-grid {
+  gap: .9rem !important;
+}
+
+/* Carte contact: depth + hover riche */
+.contact-card {
+  border: 1px solid var(--border) !important;
+  border-radius: 14px !important;
+  padding: 1rem !important;
+  transition: transform .18s cubic-bezier(.4,0,.2,1),
+              box-shadow .18s ease,
+              border-color .18s ease !important;
+}
+.contact-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(10,51,92,.14) !important;
+  border-color: rgba(10,51,92,.35) !important;
+}
+.contact-card:active {
+  transform: translateY(-1px) scale(.99);
+}
+
+/* AVATARS: generes par JS (initiale + couleur depuis le nom) */
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
+}
+
+/* BADGES PILLS modernes (statuts: membre, cotisant, benevole...) */
+.pill, .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.pill-magenta { background: rgba(10,51,92,.12); color: #0a335c; }
+.pill-green   { background: rgba(74,157,127,.14); color: #2e7d5f; }
+.pill-rose    { background: rgba(221,131,169,.14); color: #b35a80; }
+.pill-gray    { background: rgba(122,122,133,.12); color: #5c5c66; }
+.pill-orange  { background: rgba(255,152,0,.14); color: #b36a00; }
+[data-theme='dark'] .pill-magenta { background: rgba(144,180,215,.18); color: #a8c8e8; }
+[data-theme='dark'] .pill-green   { background: rgba(92,184,148,.18); color: #7fd4b2; }
+[data-theme='dark'] .pill-rose    { background: rgba(221,131,169,.18); color: #eeb0ca; }
+[data-theme='dark'] .pill-gray    { background: rgba(156,152,168,.18); color: #c0bcc8; }
+[data-theme='dark'] .pill-orange  { background: rgba(255,152,0,.18); color: #ffb84d; }
+
+/* ===== POLISH GLOBAL avec la nouvelle palette ===== */
+
+/* Boutons primaires: magenta + ombre coloree */
+.btn-primary {
+  background: var(--pink) !important;
+  box-shadow: 0 3px 12px rgba(10,51,92,.25) !important;
+}
+.btn-primary:hover {
+  box-shadow: 0 5px 18px rgba(10,51,92,.35) !important;
+}
+
+/* Header: couleur originale */
+header {
+  background: var(--pink) !important;
+}
+
+/* Login: degrade original */
+#loginView {
+  background: linear-gradient(135deg,var(--pink),var(--pink-dark)) !important;
+}
+
+/* Focus inputs: ring magenta doux */
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgba(10,51,92,.14) !important;
+  border-color: var(--pink) !important;
+}
+
+/* Sidebar (v3): garde le degrade mais en magenta */
+nav {
+  background: linear-gradient(180deg, #0a335c 0%, #072645 100%) !important;
+}
+nav button.active {
+  box-shadow: inset 3px 0 0 var(--rose) !important;
+}
+
+/* Scrollbar verticale: magenta */
+body::-webkit-scrollbar-thumb,
+body > div::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(10,51,92,.5), rgba(10,51,92,.3)) !important;
+}
+body::-webkit-scrollbar-thumb:hover,
+body > div::-webkit-scrollbar-thumb:hover {
+  background: var(--pink) !important;
+}
+body, body > div {
+  scrollbar-color: rgba(10,51,92,.45) var(--bg);
+}
+[data-theme='dark'] body::-webkit-scrollbar-thumb,
+[data-theme='dark'] body > div::-webkit-scrollbar-thumb {
+  background: rgba(232,88,216,.4) !important;
+}
+
+/* Tableaux: en-tete discret, lignes aerees */
+.contacts-table thead th {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
 </style>
 </head>
 <body>
@@ -624,6 +1045,8 @@ nav button .nav-icon{font-size:1.4rem}
 <button data-view="documents" onclick="showView('documents')"><span class="nav-icon">&#128206;</span>Docs</button>
 <button data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">&#128202;</span>Dashboard</button>
 <button data-view="cotisations" onclick="showView('cotisations')"><span class="nav-icon">&#128176;</span>Cotis.</button>
+<button data-view="facture-livre" onclick="showView('facture-livre')"><span class="nav-icon">&#128181;</span>Facture livre</button>
+
 <button data-view="taches" onclick="showView('taches')"><span class="nav-icon">&#9745;</span>Taches</button>
 <button data-view="groupes" onclick="showView('groupes')"><span class="nav-icon">&#128229;</span>Groupes</button>
 <button data-view="dons" onclick="showView('dons')"><span class="nav-icon">&#127881;</span>Dons</button>
@@ -647,6 +1070,190 @@ nav button .nav-icon{font-size:1.4rem}
 <button data-view="mon-espace" onclick="showView('mon-espace')"><span class="nav-icon">&#128100;</span>Mon espace</button>
 </nav>
 </div>
+
+
+<!-- ============ VUE FACTURATION LIVRE ============ -->
+<div class="view" id="view-facture-livre">
+  <h2 style="margin-bottom:.3rem">Facturation « Chut ! c'est un secret… »</h2>
+  <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:1rem">Créer une facture légale et suivre les ventes pour la comptabilité de l'association.</p>
+
+  <!-- Stats ventes -->
+  <div class="stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-bottom:1.5rem" id="vlStats"></div>
+
+  <!-- Formulaire nouvelle facture -->
+  <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.2rem;margin-bottom:1.5rem">
+    <h3 style="margin-bottom:.8rem">Nouvelle facture</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem">
+      <div>
+        <label style="font-size:.75rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:.3rem">Client (nom) *</label>
+        <input id="vlClientNom" class="form-input" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)" placeholder="Nom du client / boutique">
+      </div>
+      <div>
+        <label style="font-size:.75rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:.3rem">Email (envoi auto)</label>
+        <input id="vlClientEmail" type="email" class="form-input" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)" placeholder="optionnel">
+      </div>
+    </div>
+    <div style="margin-bottom:.8rem">
+      <label style="font-size:.75rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:.3rem">Adresse</label>
+      <input id="vlClientAdresse" class="form-input" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)" placeholder="adresse du client (optionnel)">
+    </div>
+    <label style="font-size:.75rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:.4rem">Articles *</label>
+    <div id="vlLignes" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.8rem"></div>
+    <button onclick="vlAddLigne()" style="background:var(--pink-light);color:var(--pink);border:1px dashed var(--pink);border-radius:8px;padding:8px 14px;font-size:.85rem;font-weight:600;cursor:pointer">+ Ajouter une ligne</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+      <div>
+        <label style="font-size:.75rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:.3rem">Paiement</label>
+        <select id="vlPaiement" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">
+          <option value="cheque">Chèque</option>
+          <option value="virement">Virement</option>
+          <option value="especes">Espèces</option>
+        </label>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:.75rem;color:var(--text-secondary)">TOTAL</div>
+        <div id="vlTotal" style="font-size:1.8rem;font-weight:800;background:linear-gradient(135deg,var(--pink),var(--rose));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">0.00 €</div>
+      </div>
+    </div>
+    <button onclick="vlCreate()" id="vlBtn" style="width:100%;margin-top:1rem;padding:13px;background:linear-gradient(135deg,var(--pink),var(--pink-dark));color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(10,51,92,.25)">Générer la facture PDF</button>
+    <div id="vlResult" style="margin-top:.8rem;display:none"></div>
+  </div>
+
+  <!-- Historique factures -->
+  <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.2rem">
+    <h3 style="margin-bottom:.8rem">Factures récentes</h3>
+    <div id="vlHistorique" style="font-size:.85rem"></div>
+  </div>
+</div>
+
+<script>
+/* ===== FACTURATION LIVRE (frontend) ===== */
+var VL_TOKEN = localStorage.getItem('romy_token') || sessionStorage.getItem('romy_token') || '';
+var VL_PRODUITS = {};
+
+function vlApi(method, url, body){
+  return fetch(url, {
+    method: method,
+    headers: Object.assign({'Authorization': 'Bearer ' + VL_TOKEN}, body ? {'Content-Type': 'application/json'} : {}),
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+function vlAddLigne(){
+  var div = document.createElement('div');
+  div.className = 'vl-ligne';
+  div.style.cssText = 'display:flex;gap:.5rem;align-items:center';
+  var opts = '';
+  Object.keys(VL_PRODUITS).forEach(function(k){
+    opts += '<option value="'+k+'">'+VL_PRODUITS[k].libelle+' — '+VL_PRODUITS[k].prix.toFixed(2)+' €</option>';
+  });
+  div.innerHTML = '<select class="vl-version form-input" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">'+opts+'</select>' +
+    '<input type="number" class="vl-qte" min="1" value="1" style="width:70px;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)" onchange="vlUpdateTotal()" oninput="vlUpdateTotal()">' +
+    '<button onclick="this.parentElement.remove();vlUpdateTotal()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:9px 12px;cursor:pointer">×</button>';
+  document.getElementById('vlLignes').appendChild(div);
+  vlUpdateTotal();
+}
+
+function vlGetLignes(){
+  var lignes = [];
+  document.querySelectorAll('#vlLignes .vl-ligne').forEach(function(row){
+    var v = row.querySelector('.vl-version').value;
+    var q = parseInt(row.querySelector('.vl-qte').value) || 0;
+    if (q > 0) lignes.push({version: v, quantite: q});
+  });
+  return lignes;
+}
+
+function vlUpdateTotal(){
+  var t = 0;
+  vlGetLignes().forEach(function(l){
+    if (VL_PRODUITS[l.version]) t += VL_PRODUITS[l.version].prix * l.quantite;
+  });
+  document.getElementById('vlTotal').textContent = t.toFixed(2) + ' €';
+}
+
+function vlCreate(){
+  var lignes = vlGetLignes();
+  if (!lignes.length) { alert('Ajoutez au moins une ligne'); return; }
+  var btn = document.getElementById('vlBtn');
+  btn.disabled = true;
+  btn.textContent = 'Génération...';
+  vlApi('POST', '/api/ventes-livre', {
+    client_nom: document.getElementById('vlClientNom').value || 'Client',
+    client_email: document.getElementById('vlClientEmail').value,
+    client_adresse: document.getElementById('vlClientAdresse').value,
+    lignes: lignes,
+    paiement: document.getElementById('vlPaiement').value
+  }).then(function(d){
+    // Telecharger le PDF
+    var bin = atob(d.pdf_base64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var blob = new Blob([bytes], {type: 'application/pdf'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = d.numero + '.pdf';
+    a.click();
+    var res = document.getElementById('vlResult');
+    res.style.display = 'block';
+    res.innerHTML = '<div style="background:rgba(74,157,127,.12);color:var(--green);padding:.8rem;border-radius:10px;font-weight:600">✓ Facture ' + d.numero + ' générée (' + d.total.toFixed(2) + ' €)' + (d.email_envoye ? ' et envoyée par email' : '') + '</div>';
+    btn.disabled = false;
+    btn.textContent = 'Générer la facture PDF';
+    vlLoadStats();
+  }).catch(function(e){
+    var res = document.getElementById('vlResult');
+    res.style.display = 'block';
+    res.innerHTML = '<div style="background:rgba(244,67,54,.12);color:var(--red);padding:.8rem;border-radius:8px">Erreur: ' + e.message + '</div>';
+    btn.disabled = false;
+    btn.textContent = 'Générer la facture PDF';
+  });
+}
+
+function vlLoadStats(){
+  vlApi('GET', '/api/ventes-livre').then(function(d){
+    var s = '<div style="background:var(--pink-light);border-radius:12px;padding:.9rem;text-align:center"><div style="font-size:1.7rem;font-weight:800;background:linear-gradient(135deg,var(--pink),var(--rose));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">' + d.total_montant.toFixed(2) + ' €</div><div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)">Total ventes</div></div>' +
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.9rem;text-align:center"><div style="font-size:1.7rem;font-weight:800;color:var(--pink)">' + d.total_quantite + '</div><div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)">Livres vendus</div></div>' +
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.9rem;text-align:center"><div style="font-size:1.7rem;font-weight:800;color:var(--pink)">' + d.nb_factures + '</div><div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)">Factures</div></div>';
+    document.getElementById('vlStats').innerHTML = s;
+
+    // Detail par version
+    var byVersion = d.stats_par_version.map(function(v){
+      return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)">' + v.libelle + '</td><td style="padding:6px;text-align:center;border-bottom:1px solid var(--border)">' + v.quantite + '</td><td style="padding:6px;text-align:right;border-bottom:1px solid var(--border)">' + v.montant.toFixed(2) + ' €</td></tr>';
+    }).join('');
+    var hist = '<table style="width:100%;border-collapse:collapse;font-size:.85rem"><thead><tr><th style="text-align:left;padding:6px;color:var(--text-secondary);font-size:.7rem;text-transform:uppercase">Version</th><th style="text-align:center;color:var(--text-secondary);font-size:.7rem">Qté</th><th style="text-align:right;color:var(--text-secondary);font-size:.7rem">Montant</th></tr></thead><tbody>' + byVersion + '</tbody></table>';
+
+    // Factures recentes
+    var facts = (d.factures || []).slice(0, 8).map(function(num){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)"><span style="font-weight:600">' + num + '</span><a href="/api/ventes-livre/facture/' + num + '" target="_blank" style="color:var(--pink);font-weight:600;text-decoration:none">PDF ↓</a></div>';
+    }).join('');
+    document.getElementById('vlHistorique').innerHTML = '<div style="margin-bottom:1rem">' + hist + '</div>' + (facts ? '<h4 style="margin-bottom:.5rem">Télécharger une facture</h4>' + facts : '');
+  }).catch(function(e){
+    document.getElementById('vlStats').innerHTML = '<div style="color:var(--red)">Erreur: ' + e.message + '</div>';
+  });
+}
+
+// Chargement quand la vue s ouvre (hook showView existant)
+(function(){
+  var origShowView = window.showView;
+  window.showView = function(v){
+    origShowView(v);
+    if (v === 'facture-livre') {
+      if (!Object.keys(VL_PRODUITS).length) {
+        vlApi('GET', '/api/ventes-livre/produits').then(function(d){
+          VL_PRODUITS = d.produits;
+          vlAddLigne();
+          vlLoadStats();
+        });
+      } else {
+        vlLoadStats();
+      }
+    }
+  };
+})();
+</script>
+
 
 <!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay">
@@ -5410,5 +6017,60 @@ function clearGlobalSearch() {
   if (input) input.focus();
 }
 </script>
+
+<script>
+/* ===== AVATARS AUTOMATIQUES (initiale + couleur depuis le nom) ===== */
+(function(){
+  'use strict';
+  // Palette de 8 couleurs sourdes harmonisees avec le magenta du logo
+  var COLORS = [
+    ['#0a335c', '#072645'],  // bleu nuit (logo UI)
+    ['#4a9d7f', '#2e7d5f'],  // vert sauge
+    ['#2c6fb0', '#1e4f82'],  // bleu moyen
+    ['#5c6b7a', '#3d4854'],  // gris-bleu
+    ['#dd83a9', '#b35a80'],  // rose (accent association)
+    ['#8e6bc7', '#6a4a9e'],  // mauve
+    ['#6c9186', '#4d6e64'],  // vert-gris
+    ['#4aa3d5', '#2d7ba3']   // bleu ciel
+  ];
+
+  function hashCode(str){
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) - h) + str.charCodeAt(i);
+      h = h | 0;
+    }
+    return Math.abs(h);
+  }
+
+  function initials(name){
+    var parts = (name || '?').trim().split(/\s+/);
+    var init = '';
+    for (var i = 0; i < parts.length && init.length < 2; i++) {
+      if (parts[i] && parts[i][0]) init += parts[i][0];
+    }
+    return init.toUpperCase() || '?';
+  }
+
+  // Applique un avatar a chaque element marque .avatar[data-name]
+  function renderAvatars(root){
+    var els = (root || document).querySelectorAll('.avatar[data-name]:not([data-rendered])');
+    els.forEach(function(el){
+      var name = el.getAttribute('data-name') || '?';
+      var c = COLORS[hashCode(name) % COLORS.length];
+      el.style.background = 'linear-gradient(135deg,' + c[0] + ',' + c[1] + ')';
+      el.textContent = initials(name);
+      el.setAttribute('data-rendered', '1');
+    });
+  }
+
+  // Initial + observation des changements (vues re-rendues dynamiquement)
+  document.addEventListener('DOMContentLoaded', function(){ renderAvatars(); });
+  var observer = new MutationObserver(function(){ renderAvatars(); });
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.renderRomyAvatars = renderAvatars;
+})();
+</script>
+
 </body>
 </html>

@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+pillow
+python-multipart
+openpyxl
+httpx
+reportlab
